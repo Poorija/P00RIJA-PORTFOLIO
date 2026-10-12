@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Database
+db/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker state
+.docker-state/
+
+# Testing
+coverage/
+.playwright-mcp/
+
+# Misc
+AGENTS.md
+CLAUDE.md
+.mimosa/
+agent-ctx/
+download/
+examples/
+mini-services/
+.zcode/
+.zscripts/
+*.tar.gz
+*.tar
+*.zip
+
+# Trial stamp (runtime artifact)
+.trial-stamp
+worklog.md
+tsconfig.tsbuildinfo
+tool-results/
+.zcodeignore
+README.fa.md

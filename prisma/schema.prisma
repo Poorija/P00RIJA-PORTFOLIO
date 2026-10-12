@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Content {
+  id        String   @id @default(cuid())
+  section   String   @unique
+  data      String   // JSON string of the section content
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model AuthSettings {
+  id               String   @id @default("singleton")
+  passwordHash     String?
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String?
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+}
+
+// Uploaded binary assets (résumé PDF, avatar, …) stored as base64 so they
+// survive rebuilds and work identically in Docker volumes.
+model Upload {
+  id        String   @id @default(cuid())
+  filename  String
+  title     String   @default("")
+  altText   String   @default("")
+  category  String   @default("Uncategorized")
+  tags      String   @default("[]") // JSON string array
+  mime      String
+  size      Int
+  data      String // base64-encoded bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// One row per unique visitor session. Refreshed by /api/track heartbeats;
+// pruned by the analytics housekeeper so the SQLite file stays small on
+// low-memory servers (1 core / ~900MB RAM).
+model VisitSession {
+  id         String   @id @default(cuid())
+  sessionKey String   @unique
+  startedAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  durationMs Int      @default(0)
+  ip         String   @default("")
+  browser    String   @default("")
+  os         String   @default("")
+  device     String   @default("desktop") // desktop | mobile | tablet | bot
+  screen     String   @default("")
+  language   String   @default("")
+  timezone   String   @default("")
+  referrer   String   @default("")
+  path       String   @default("/")
+  userAgent  String   @default("")
+  country    String   @default("")
+  region     String   @default("")
+  city       String   @default("")
+  isBot      Boolean  @default(false)
+  botReason  String   @default("")
+  pings      Int      @default(1)
+  blocked    Boolean  @default(false)
+
+  @@index([lastSeenAt])
+  @@index([startedAt])
+  @@index([isBot])
+}
+
+// Commercial license activation. One row per install (singleton-ish):
+// the encrypted license file payload, this server's unique UUID, the
+// heartbeat state against the license server, and a local usage counter.
+model LicenseActivation {
+  id              String   @id @default(cuid())
+  licenseId       String   @unique
+  deviceId        String   @unique // persistent UUID of THIS install
+  payload         String   // decrypted license JSON (server URL, plan, slots, …)
+  signature       String   @default("") // Ed25519 signature (base64url)
+  status          String   @default("active") // active | maintenance | blocked
+  failCount       Int      @default(0)
+  usageCount      Int      @default(0)
+  lastHeartbeatAt DateTime?
+  lastServerMessage String @default("")
+  activatedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

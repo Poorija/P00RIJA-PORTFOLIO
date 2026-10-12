@@ -1,0 +1,43 @@
+# Hot-reload development stack.
+#
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# - The whole repository is bind-mounted into /app: edit any file on your
+#   machine and the app inside the container reloads immediately
+#   (no container restart, no rebuild).
+# - WATCH_POLL_INTERVAL_MS turns on file-watcher polling — required on
+#   macOS/Windows because Docker bind mounts don't propagate native
+#   filesystem events into the Linux VM.
+# - node_modules and .next live in named volumes so host folders never
+#   shadow the container's own dependencies/build cache.
+# - ./db is bind-mounted so CMS content edits persist on your machine.
+
+services:
+  portfolio-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: p00rija/portfolio-dev:local
+    container_name: p00rija-portfolio-dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      HIDE_NEXT_DEV_INDICATOR: "1"
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: file:/app/db/custom.db
+      WATCH_POLL_INTERVAL_MS: "300"
+    ports:
+      - "127.0.0.1:7890:3000"
+    volumes:
+      - .:/app
+      - portfolio-dev-node-modules:/app/node_modules
+      - portfolio-dev-next:/app/.next
+      - ./db:/app/db
+
+volumes:
+  portfolio-dev-node-modules:
+  portfolio-dev-next:

@@ -1,0 +1,31 @@
+# Development image — hot reload inside Docker.
+#
+# Source code is NOT baked into the image: docker-compose.dev.yml bind-mounts
+# the repository over /app, so every local file edit appears in the running
+# container instantly. WATCH_POLL_INTERVAL_MS enables the file-watcher
+# polling that macOS/Windows Docker bind mounts require.
+#
+# Build:   docker compose -f docker-compose.dev.yml build
+# Run:     docker compose -f docker-compose.dev.yml up
+# App:     http://127.0.0.1:7890
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    HIDE_NEXT_DEV_INDICATOR=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000 \
+    DATABASE_URL=file:/app/db/custom.db \
+    WATCH_POLL_INTERVAL_MS=300
+
+# Install dependencies first (this layer is cached until package.json changes).
+COPY package*.json ./
+RUN npm install --include=dev --no-audit --no-fund
+
+# Prisma client is generated into node_modules; regenerate at startup too so
+# schema edits on the host are picked up without rebuilding the image.
+EXPOSE 3000
+
+CMD ["sh", "-c", "npx prisma generate && npx prisma db push --skip-generate && exec npx next dev -p 3000 -H 0.0.0.0"]

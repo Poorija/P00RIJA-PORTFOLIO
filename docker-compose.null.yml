@@ -1,0 +1,33 @@
+# Public Null-mode distribution: portfolio identity/content hidden until the
+# owner signs in. Zero-config: works with `docker load` / `docker pull` and
+# `docker compose up` — no .env required. On the first boot the container
+# generates its session secret and falls back to the documented default CMS
+# password (see CMS-PASSWORD.txt written into the db volume — CHANGE IT).
+services:
+  portfolio:
+    image: ${P00RIJA_IMAGE:-p00rija/portfolio:null}
+    container_name: p00rija-portfolio-null
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: file:/app/db/custom.db
+      P00RIJA_DISTRIBUTION_MODE: "null"
+      # Recommended: set a strong CMS login instead of the documented default:
+      # ADMIN_PASSWORD: "change-me-to-something-strong"
+    ports:
+      - "${P00RIJA_BIND_HOST:-0.0.0.0}:${P00RIJA_PORT:-7890}:3000"
+    volumes:
+      - portfolio-null-db:/app/db
+    init: true
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  portfolio-null-db:
