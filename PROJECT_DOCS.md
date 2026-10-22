@@ -1,6 +1,6 @@
 # P00RIJA PORTFOLIO — مستندات کامل پروژه
 
-> آخرین به‌روزرسانی: ۲۰۲۶-۰۹-۱۲ · این فایل نقشه‌ی کامل معماری، ساختار، جریان‌ها و دیپلوی پروژه است.
+> آخرین به‌روزرسانی: ۲۰۲۶-۱۰-۲۲ · این فایل نقشه‌ی کامل معماری، ساختار، جریان‌ها و دیپلوی پروژه است.
 > **محدودیت سرور هدف: ۱ هسته CPU و ~۹۰۰ مگابایت RAM — بیلد فقط روی سیستم محلی (Docker) انجام می‌شود و ایمیج آماده به سرور منتقل می‌شود.**
 
 ---
@@ -21,6 +21,8 @@
 | 🌊 **اسکرول سیال (Lenis)** — کتابخانه‌ی `lenis` با lerp 0.09؛ wheel به‌جای پله‌ای، نرم و اینرسی‌دار. غیرفعال برای reduced-motion و حالت انیمیشن «خاموش» و موبایل تاچ. اسکرول‌های برنامه‌ای (لینک‌های #) از `window.__lenis.scrollTo` عبور می‌کنند | `smooth-scroll.tsx`, `content-boot.tsx`, CSS کلاس‌های `html.lenis` |
 | 🔧 **فیکس فریز اسکرول (پروفایل‌شده)** — چهار عامل اصلی: ① `mix-blend-mode: screen` لکه‌های FlowBackground با محتوای متحرک re-composite می‌شد (p90 فریم ۳۰۷ms) → گروه با `isolate` محصور شد (→۴۶ms)؛ ② اشیاء WebGL محیطی با هر عبور اسکرول destroy/rebuild می‌شدند (کامپایل shader ~۸۰۰ms) → hysteresis: ساخت در ۶۰۰px، آزادسازی در ۳۰۰۰px؛ ③ `scale()` داخل keyframeهای liquid باعث re-raster دائمی لایه‌های blur می‌شد → حذف شد؛ ④ صحنه‌ی Three سکشن گرافیک به inView وابسته بود → یک‌بار ساخت + gate حلقه با ref | `flow-background.tsx`, `ambient-3d-object.tsx`, `globals.css`, `graphics-section.tsx` |
 | 🎨 **مرز سکشن‌ها v2** — نوار قبلی plateau ماسک داشت که مثل «خط قرمز نازک» دیده می‌شد → ماسک تک‌قله‌ای (اوج در درز، محو دوطرفه) + آلفای ۶-۷٪. درخشش‌های داخلی سکشن‌ها (کاتِ لبه‌ای) با ماسک عمودی ۱۱۰px محو می‌شوند. حباب synthesis: عرض ۸۰vw (۱۰٪ هر طرف)، ارتفاع ۱۳۵٪ با مرکز پایین‌تر (کشیده به سمت مرز بعدی)، گرادیان با توقف شفاف واقعی (بدون لبه‌ی بیضی) | `globals.css`, `synthesis.tsx` |
+| 🔐 **قفل رمز سایت و بخش‌ها — Access Guard (v3.3.0)** — مالک می‌تواند کل سایت یا هر بخش از صفحه اصلی (hero/graphics/security/ai/timeline/synthesis/footer/custom-*) را با رمز محافظت کند: PIN ۴/۶ رقمی (input-otp) یا رمز متنی؛ حالت «همیشه باز» یا «سقف N تلاش» (بعد از N رمز اشتباه قفل تا ریست مدیر غیرفعل می‌شود، مثل کارت بانکی)؛ کوکی آنلاک امضاشده HMAC httpOnly با عمق configurable (session تا ۹۰ روز)؛ **محتوای واقعی بخش قفل‌شده سمت سرور از /api/content حذف می‌شود** (بلر صرفاً نمایشی است — دور زدن مرورگری ممکن نیست)؛ قفل کل سایت: proxy همه‌جا بجز /gate و /api/protection و /api/auth را می‌بندد (نشست CMS همیشه عبور می‌کند؛ مسیر بازیابی: «ورود مدیر» در /gate یا ویرایش db/site-protection.json). پنل مدیریت در CMS → ابزارها → Access Guard | `src/lib/site-protection.ts`, `src/app/api/protection/*`, `src/proxy.ts`, `src/app/gate/`, `src/components/portfolio/section-guard.tsx`, `cms-site-guard.tsx`, `portfolio-section-stack.tsx` |
+| 🧹 **پاکسازی و آپدیت‌های v3.3.0** — Next.js 16.4.2، three 0.186، lucide-react 1.61 (آیکون‌های برند Github/LinkedIn/Twitter به SVG داخلی منتقل شدند)، nodemailer 10.2.1، zustand 5.0.16، حذف uuid بلااستفاده؛ ایمیج پایه node:24-alpine؛ فیکس باگ واقعی rules-of-hooks در PixelBuddy (هوک‌های شرطی → کرش در تعویض cfg)، تایمر Minesweeper از window به useRef، latest-ref در games/shared به effect، eslint+tsconfig حالا dist/ و پکیج‌های قدیمی را نادیده می‌گیرند؛ npm audit رانتایم = 0 | `package.json`, `Dockerfile`, `pixel-buddy.tsx`, `games/*`, `brand-icons.tsx`, `eslint.config.mjs` |
 | 🔒 **اسکن امنیتی و فیکس** — آپدیت Next.js 16.1.1→16.3.5 (رفع RCE بحرانی GHSA-p293-qw3h-jr36 و GHSA-2xp9-vwfh-vxw4)، nodemailer 9.1.1، sharp 0.35.4؛ بررسی auth همه‌ی APIها؛ SVG-sanitizer و rate-limit موجود تأیید شد. باگ یافت‌شده: مسدود شدن وب‌سوکت HMR در داکر → `allowedDevOrigins` در `next.config.ts` (فقط dev) + خروج `_next/hmr` از matcher پروکسی | `package-lock.json`, `next.config.ts`, `proxy.ts` |
 
 نکته‌های باقی‌مانده: ۳ حفره‌ی high فقط مربوط به CLI بیلد `prisma` (وابستگی `deepmerge-ts`) است — در رانتایم نیست و صبر برای Prisma 8 نیاز دارد.
@@ -33,7 +35,7 @@
 
 | لایه | تکنولوژی |
 | --- | --- |
-| فریم‌ورک | **Next.js 16.1.1** (App Router, Turbopack, `output: "standalone"`) |
+| فریم‌ورک | **Next.js 16.4.2** (App Router, Turbopack, `output: "standalone"`) |
 | UI | React 19 + Tailwind CSS 4 + shadcn/ui (Radix) + lucide-react |
 | انیمیشن | framer-motion 12 + CSS keyframes + Three.js (اشیاء سه‌بعدی Ambient) |
 | وضعیت کلاینت | Zustand (`src/lib/content-store.ts`) |
@@ -47,7 +49,7 @@
 - سرور: ۱ هسته، ~۹۰۰MB RAM → **هرگز روی سرور بیلد نکنید** (OOM می‌شود).
 - `Dockerfile` با `--build-arg P00RIJA_BUILD_MEMORY_MB / P00RIJA_BUILD_CPUS` و `scripts/hardware-profile.sh` پروفایل سخت‌افزاری را کنترل می‌کند.
 - `next.config.ts`: `experimental.cpus`، gzip، ETag ضعیف، هدرهای کش برای `/api/content`.
-- Runtime container: `node:20-alpine` + sqlite + ffmpeg؛ `pids_limit: 256`، healthcheck روی `/api`.
+- Runtime container: `node:24-alpine` + sqlite + ffmpeg؛ `pids_limit: 256`، healthcheck روی `/api`.
 
 ---
 

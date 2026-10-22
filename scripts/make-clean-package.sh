@@ -58,12 +58,13 @@ tar -cf - \
   --exclude './.env.local' \
   --exclude './.env.*.local' \
   --exclude '.DS_Store' \
-  --exclude '.playwright-mcp' \
-  --exclude '.mimosa' \
+  --exclude './.playwright-mcp' \
+  --exclude './.mimosa' \
   --exclude './agent-ctx' \
   --exclude './download' \
   --exclude './examples' \
   --exclude './mini-services' \
+  --exclude './tool-results' \
   --exclude './docker-compose.web.yml' \
   --exclude './docker-compose.server.yml' \
   --exclude './bun.lock' \
@@ -71,9 +72,17 @@ tar -cf - \
   --exclude './AGENTS.md' \
   --exclude './CLAUDE.md' \
   --exclude './*.log' \
-  --exclude './[a-zA-Z-]*.png' \
   --exclude './--port' \
   --exclude './7891' \
+  --exclude './band-*.png' \
+  --exclude './entry-*.png' \
+  --exclude './guard-*.png' \
+  --exclude './gate-*.png' \
+  --exclude './tsconfig.tsbuildinfo' \
+  --exclude './license-server' \
+  --exclude './docker-compose.license.yml' \
+  --exclude './docker-compose.license.local.yml' \
+  --exclude './Dockerfile.license' \
   . | tar -xf - -C "$STAGE"
 
 # ── 2. Distribution metadata files ──────────────────────────────────────────
@@ -116,6 +125,9 @@ if [ -e "$STAGE/.env" ]; then
 fi
 if [ -d "$STAGE/db" ]; then
   echo "ERROR: db/ leaked into the package" >&2; exit 1
+fi
+if [ -d "$STAGE/license-server" ] || [ -f "$STAGE/Dockerfile.license" ]; then
+  echo "ERROR: the private license-server leaked into the public package" >&2; exit 1
 fi
 # Assembled at runtime so this script never contains the literal itself.
 local_pw_marker="P00RIJA-local-""2026"

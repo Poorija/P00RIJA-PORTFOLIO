@@ -153,6 +153,8 @@ export function PixelBuddy() {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [walking, setWalking] = useState(true);
   const walkDir = useRef(1);
+  // Mirror of walkDir for render (reading refs during render is unsafe).
+  const [flipDir, setFlipDir] = useState(false);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -169,7 +171,10 @@ export function PixelBuddy() {
         const x = p?.x ?? (end ? window.innerWidth - 110 : 30);
         const y = p?.y ?? window.innerHeight - 110;
         const nx = x + walkDir.current * (8 + Math.random() * 14);
-        if (nx < 16 || nx > window.innerWidth - 96) walkDir.current *= -1;
+        if (nx < 16 || nx > window.innerWidth - 96) {
+          walkDir.current *= -1;
+          setFlipDir(walkDir.current < 0);
+        }
         return { x: Math.min(window.innerWidth - 96, Math.max(16, nx)), y };
       });
     }, 700);
@@ -226,6 +231,15 @@ export function PixelBuddy() {
     }
   }, [input, busy, bubble, lang, fa]);
 
+  // Visitor's chosen look (persisted per-browser) — overrides the CMS default
+  // when the owner allows visitor choice. Declared before the enabled-guard
+  // below so the hook order stays identical whether or not cfg exists.
+  const [choice, setChoice] = useState<string | null>(null);
+  const [wardrobe, setWardrobe] = useState(false);
+  useEffect(() => {
+    try { setChoice(localStorage.getItem("p00rija-pet-char")); } catch { /* ignore */ }
+  }, []);
+
   if (cfg?.enabled === false || !cfg) return null;
   const isCustom = cfg.position === "custom";
   const customX = Number(cfg.customX ?? 90);
@@ -236,15 +250,8 @@ export function PixelBuddy() {
   const y = pos?.y ?? (isCustom
     ? (typeof window !== "undefined" ? (customY / 100) * (window.innerHeight - 80) : 500)
     : typeof window !== "undefined" ? window.innerHeight - 110 : 700);
-  const flipped = walkDir.current < 0;
+  const flipped = flipDir;
 
-  // Visitor's chosen look (persisted per-browser) — overrides the CMS default
-  // when the owner allows visitor choice.
-  const [choice, setChoice] = useState<string | null>(null);
-  const [wardrobe, setWardrobe] = useState(false);
-  useEffect(() => {
-    try { setChoice(localStorage.getItem("p00rija-pet-char")); } catch { /* ignore */ }
-  }, []);
   const canChoose = cfg?.visitorChoice !== false;
   const character = (canChoose && choice) || cfg?.character || "blob";
 

@@ -19,6 +19,10 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     // React rules
     "react-hooks/exhaustive-deps": "off",
     "react-hooks/purity": "off",
+    // v6 heuristic — the codebase intentionally syncs external systems
+    // (localStorage, timers, game loops, async API loads) inside effects;
+    // the rule cannot distinguish those from cascading-render bugs.
+    "react-hooks/set-state-in-effect": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
     "react/prop-types": "off",
@@ -44,7 +48,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "dist/**", "download/**", "tool-results/**", "license-server/**", "agent-ctx/**", "next-env.d.ts", "examples/**", "skills", "*.png"]
 }];
 
 export default eslintConfig;

@@ -614,7 +614,7 @@ function CoverArt({ p, i }: { p: ProjectArtwork; i: number }) {
       }}
     >
       {isImg ? (
-        // eslint-disable-next-line @next/next/no-img-element
+         
         <img src={img} alt={p.title} className="h-full w-full object-cover" loading="lazy" />
       ) : (
         <span className="absolute inset-0 grid place-items-center font-mono text-4xl font-black text-white/25">
@@ -695,7 +695,7 @@ function SpotlightBody({
           style={{ background: isImg ? "#0b0b12" : `linear-gradient(140deg, ${p.color}, oklch(0.16 0.03 280))` }}
         >
           {isImg && (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img src={img} alt={p.title} className="h-full w-full object-contain" />
           )}
         </div>

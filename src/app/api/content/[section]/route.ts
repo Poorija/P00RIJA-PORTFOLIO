@@ -5,6 +5,7 @@
 // DELETE /api/content/[section]            → deletes the row (auth required; custom- only)
 
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { defaultContentFa, defaultContentEn } from "@/lib/default-content";
 import { blankContentFa, blankContentEn } from "@/lib/blank-content";
@@ -16,6 +17,8 @@ import {
 import { isAuthenticated } from "@/lib/auth";
 import { getContentSection, invalidateContent } from "@/lib/content-cache";
 import { isDeveloperOwnerUnlocked, lockDeveloperOwner } from "@/lib/developer-owner";
+import { pinDeveloperData } from "@/lib/vendor-identity";
+import { readProtection, unlockedTargetsFromCookies } from "@/lib/site-protection";
 
 function isSectionKey(value: string): value is SectionKey {
   return (SECTION_KEYS as string[]).includes(value);
@@ -46,7 +49,22 @@ export async function GET(
     const url = new URL(request.url);
     const langParam = url.searchParams.get("lang");
 
-    const data = await getContentSection(section);
+    // Access Guard: a locked section's DB data is withheld from anyone
+    // without a valid unlock cookie (CMS admins excepted) — serve the
+    // bundled defaults instead, exactly like the stripped /api/content.
+    const protection = await readProtection();
+    const lock = protection.sections[section];
+    let data = await getContentSection(section);
+    if (lock?.enabled && lock.hash && !(await isAuthenticated())) {
+      const cookieStore = await cookies();
+      const unlocked = unlockedTargetsFromCookies(
+        protection.sections,
+        (name) => cookieStore.get(name)?.value
+      );
+      if (!unlocked.has(section)) {
+        data = { fa: DEFAULTS.fa[section], en: DEFAULTS.en[section] };
+      }
+    }
 
     if (isLang(langParam)) {
       return NextResponse.json({ ok: true, section, lang: langParam, data: data[langParam] });
@@ -84,6 +102,15 @@ export async function PUT(
       return NextResponse.json({ ok: false, error: "Missing 'data'" }, { status: 400 });
     }
 
+    // The developer section carries the vendor identity — it needs the
+    // developer-owner key (same rule as POST /api/content) and every write
+    // is re-pinned to the official identity values before persisting.
+    if (section === "developer") {
+      if (!(await isDeveloperOwnerUnlocked())) {
+        return NextResponse.json({ ok: false, error: "Developer owner key required" }, { status: 403 });
+      }
+    }
+
     const existing = await db.content.findUnique({ where: { section } });
     let current: { fa: unknown; en: unknown };
     if (existing) {
@@ -95,7 +122,7 @@ export async function PUT(
     } else {
       current = { fa: DEFAULTS.fa[section], en: DEFAULTS.en[section] };
     }
-    current[lang] = data;
+    current[lang] = section === "developer" ? pinDeveloperData(data, lang) : data;
     const json = JSON.stringify(current);
 
     await db.content.upsert({

@@ -10,6 +10,24 @@ import { renumberWorldIndexes } from "@/lib/section-order";
 const CONTENT_CACHE_KEY = "p00rija-content-cache-v1";
 let contentRequestId = 0;
 
+/* ---------- Access Guard (site/section password protection) ---------- */
+
+export type GuardLockKind = "pin4" | "pin6" | "text";
+export type GuardLockMode = "permanent" | "attempts";
+
+export interface GuardLockInfo {
+  target: string;
+  enabled: boolean;
+  kind: GuardLockKind;
+  mode: GuardLockMode;
+  maxAttempts: number;
+  failedAttempts: number;
+  disabled: boolean;
+  hasPassword: boolean;
+  unlockDays: number;
+  updatedAt: number;
+}
+
 interface ContentState {
   contentFa: SiteContent;
   contentEn: SiteContent;
@@ -22,10 +40,19 @@ interface ContentState {
   cmsOpen: boolean;
   authed: boolean;
   authChecked: boolean;
+  guardSite: GuardLockInfo | null;
+  guardSections: Record<string, GuardLockInfo>;
+  guardUnlocked: string[];
+  guardLoaded: boolean;
   // actions
   fetchContent: (force?: boolean) => Promise<void>;
   /** Clear the browser cache and re-fetch — used after instant CMS writes. */
   refreshContent: () => Promise<void>;
+  fetchGuard: () => Promise<void>;
+  unlockGuard: (target: string, password: string) => Promise<{
+    status: "ok" | "wrong" | "disabled" | "rate" | "error";
+    remaining?: number;
+  }>;
   setLang: (lang: Lang) => void;
   setViewportWidth: (width: number) => void;
   updateSection: (section: SectionKey, data: unknown) => Promise<boolean>;
@@ -98,8 +125,10 @@ function normalizeBuiltinRadio(content: SiteContent): SiteContent {
 }
 
 const LEGACY_FA_TEXT: Readonly<Record<string, string>> = {
-  "hello@portfolio.dev": "mohammadmahdi.farhadianfard@gmail.com",
-  "mailto:hello@portfolio.dev": "mailto:mohammadmahdi.farhadianfard@gmail.com",
+  "hello@portfolio.dev": "p00rija@tutamail.com",
+  "mailto:hello@portfolio.dev": "mailto:p00rija@tutamail.com",
+  "mohammadmahdi.farhadianfard@gmail.com": "p00rija@tutamail.com",
+  "mailto:mohammadmahdi.farhadianfard@gmail.com": "mailto:p00rija@tutamail.com",
   "https://github.com": "https://github.com/Poorija",
   پوریا: "محمدمهدی فرهادیان‌فرد (پوریا)",
   GRAPHICS: "گرافیک",
@@ -148,8 +177,10 @@ const LEGACY_FA_TEXT: Readonly<Record<string, string>> = {
 };
 
 const CURRENT_IDENTITY_TEXT: Readonly<Record<string, string>> = {
-  "hello@portfolio.dev": "mohammadmahdi.farhadianfard@gmail.com",
-  "mailto:hello@portfolio.dev": "mailto:mohammadmahdi.farhadianfard@gmail.com",
+  "hello@portfolio.dev": "p00rija@tutamail.com",
+  "mailto:hello@portfolio.dev": "mailto:p00rija@tutamail.com",
+  "mohammadmahdi.farhadianfard@gmail.com": "p00rija@tutamail.com",
+  "mailto:mohammadmahdi.farhadianfard@gmail.com": "mailto:p00rija@tutamail.com",
   "https://github.com": "https://github.com/Poorija",
   Pooria: "Mohammad Mahdi Farhadian Fard (Poorija)",
 };
@@ -246,6 +277,10 @@ export const useContent = create<ContentState>((set, get) => ({
   cmsOpen: false,
   authed: false,
   authChecked: false,
+  guardSite: null,
+  guardSections: {},
+  guardUnlocked: [],
+  guardLoaded: false,
 
   fetchContent: async (force = false) => {
     if (get().loading && !force) return;
@@ -329,6 +364,51 @@ export const useContent = create<ContentState>((set, get) => ({
   refreshContent: async () => {
     clearContentCache();
     await get().fetchContent(true);
+  },
+
+  fetchGuard: async () => {
+    try {
+      const res = await fetch("/api/protection", { cache: "no-store" });
+      const json = await res.json();
+      if (json?.ok) {
+        set({
+          guardSite: json.site ?? null,
+          guardSections: json.sections ?? {},
+          guardUnlocked: Array.isArray(json.unlocked) ? json.unlocked : [],
+          guardLoaded: true,
+        });
+      } else {
+        set({ guardLoaded: true });
+      }
+    } catch {
+      set({ guardLoaded: true });
+    }
+  },
+
+  unlockGuard: async (target, password) => {
+    try {
+      const res = await fetch("/api/protection/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target, password }),
+      });
+      if (res.ok) {
+        // New unlock cookie → re-fetch both the guard state and the content
+        // (locked sections are withheld server-side until now).
+        await Promise.all([get().fetchGuard(), get().fetchContent(true)]);
+        return { status: "ok" as const };
+      }
+      if (res.status === 423) return { status: "disabled" as const };
+      if (res.status === 429) return { status: "rate" as const };
+      const json = await res.json().catch(() => null);
+      if (res.status === 401) {
+        await get().fetchGuard();
+        return { status: "wrong" as const, remaining: json?.remaining };
+      }
+      return { status: "error" as const };
+    } catch {
+      return { status: "error" as const };
+    }
   },
 
   updateSection: async (section, data) => {

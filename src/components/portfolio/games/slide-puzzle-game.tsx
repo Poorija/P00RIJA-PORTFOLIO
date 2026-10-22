@@ -48,7 +48,7 @@ export function SlidePuzzleGame() {
       submitBest(moves);
       fireAchievement("slide-solver");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [solved]);
 
   const slide = (i: number) => {

@@ -1,0 +1,40 @@
+# Keep the Docker build context clean and small.
+# Secrets and state must NEVER enter an image built from this repo:
+# production images are built from this context and published to Docker Hub.
+.git
+.gitignore
+node_modules
+.next
+dist
+db
+logs
+
+# Secrets / local env — the runtime gets its values from env_file or defaults.
+.env
+.env.local
+.env.*.local
+
+# Local dev/test artifacts
+dev.log
+server.log
+.playwright-mcp
+.mimosa
+agent-ctx
+download
+examples
+mini-services
+.DS_Store
+
+# Root-level screenshots and accidental junk files
+/*.png
+/--port
+/7891
+
+# Machine-specific generated compose files (the installer regenerates them
+# for the target host; the checked-in copies carry local absolute paths)
+docker-compose.web.yml
+docker-compose.server.yml
+
+# Internal agent/tooling notes
+AGENTS.md
+CLAUDE.md

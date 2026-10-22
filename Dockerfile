@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ RUN P00RIJA_MEMORY_MB_OVERRIDE="$P00RIJA_BUILD_MEMORY_MB" \
     sh scripts/hardware-profile.sh build sh -c "npx prisma generate && npm run build"
 
 # Keep runtime small: Prisma remains a production dependency; build tooling does not.
-FROM node:20-alpine AS runtime
+FROM node:24-alpine AS runtime
 
 WORKDIR /app
 

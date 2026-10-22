@@ -92,7 +92,7 @@ export function SudokuGame() {
 
   useEffect(() => {
     reset(8);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   useEffect(() => {

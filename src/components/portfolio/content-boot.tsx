@@ -7,6 +7,7 @@ import { APP_VERSION, APP_BUILD_DATE } from "@/lib/app-version";
 export function ContentBoot({ children }: { children: React.ReactNode }) {
   const fetchContent = useContent((s) => s.fetchContent);
   const checkAuth = useContent((s) => s.checkAuth);
+  const fetchGuard = useContent((s) => s.fetchGuard);
   const lang = useContent((s) => s.lang);
   const setLang = useContent((s) => s.setLang);
   const setViewportWidth = useContent((s) => s.setViewportWidth);
@@ -41,7 +42,8 @@ export function ContentBoot({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchContent();
     checkAuth();
-  }, [fetchContent, checkAuth]);
+    fetchGuard();
+  }, [fetchContent, checkAuth, fetchGuard]);
 
   useEffect(() => {
     const update = () => setViewportWidth(window.innerWidth);
@@ -74,7 +76,6 @@ export function ContentBoot({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.title = `${document.title.split(" ·")[0]} · v${APP_VERSION}`;
-    // eslint-disable-next-line no-console
     console.info(`%cP00RIJA build v${APP_VERSION} (${APP_BUILD_DATE})`, "color:#34d399;font-weight:bold");
   }, []);
 

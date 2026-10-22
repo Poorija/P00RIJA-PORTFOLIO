@@ -29,8 +29,12 @@ import { CookieConsent } from "@/components/portfolio/cookie-consent";
 const PixelBuddy = dynamic(() => import("@/components/portfolio/pixel-buddy").then((m) => ({ default: m.PixelBuddy })), { ssr: false });
 const GsapScrollEffects = dynamic(() => import("@/components/portfolio/gsap-scroll-effects").then((m) => ({ default: m.GsapScrollEffects })), { ssr: false });
 import { SmoothScroll } from "@/components/portfolio/smooth-scroll";
+import { SectionGuardShell } from "@/components/portfolio/section-guard";
+import { useContent } from "@/lib/content-store";
 
 export default function Home() {
+  const lang = useContent((s) => s.lang);
+  const footerLabel = useContent((s) => s.content.footer.title);
   return (
     <ContentBoot>
       <AnimModeController>
@@ -50,7 +54,9 @@ export default function Home() {
           <PortfolioSectionStack />
         </main>
 
-        <SiteFooter />
+        <SectionGuardShell target="footer" label={footerLabel || (lang === "fa" ? "پاورقی" : "Footer")}>
+          <SiteFooter />
+        </SectionGuardShell>
         <CmsPanel />
         <LoginModal />
         <BackToTop />

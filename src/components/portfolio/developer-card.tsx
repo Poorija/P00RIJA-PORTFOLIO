@@ -7,29 +7,33 @@ import {
   Check,
   Copy,
   ExternalLink,
-  Github,
   HandHeart,
   Heart,
   Mail,
   User,
   X,
 } from "lucide-react";
+import { GithubIcon as Github } from "./brand-icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { DeveloperConfig, Lang } from "@/lib/content-types";
 import { cn } from "@/lib/utils";
 import { useContent } from "@/lib/content-store";
+import { pinDeveloperData, VENDOR_IDENTITY } from "@/lib/vendor-identity";
 import { useSuspendLenis } from "@/components/portfolio/smooth-scroll";
 
-export const DEVELOPER_EMAIL = "mohammadmahdi.farhadianfard@gmail.com";
-export const DEVELOPER_GITHUB = "https://github.com/Poorija";
-export const DONATION_WALLET = "UQCEgGxRZ5A101w6RBNLwHhnva5EdK3kyDsFQcxni35DlCJf";
+// Official vendor identity — pinned at render time; see src/lib/vendor-identity.ts.
+export const DEVELOPER_EMAIL = VENDOR_IDENTITY.email;
+export const DEVELOPER_GITHUB = VENDOR_IDENTITY.github;
+export const DONATION_WALLET = VENDOR_IDENTITY.wallet;
 
 export function DeveloperCard({ lang, className, data }: { lang: Lang; className?: string; data?: DeveloperConfig }) {
   const [copied, setCopied] = useState(false);
   const isFa = lang === "fa";
   const stored = useContent((s) => s.content.developer);
-  const developer = data ?? stored;
+  // Identity fields (name/email/github/wallet/license) are always the official
+  // ones — CMS tampering or a stale cache cannot change what is rendered.
+  const developer = pinDeveloperData<DeveloperConfig | undefined>(data ?? stored, lang);
   const wallet = developer?.wallet || DONATION_WALLET;
   const donationLink = `ton://transfer/${wallet}?text=${encodeURIComponent("Donation to P00RIJA Portfolio")}`;
 
@@ -52,7 +56,7 @@ export function DeveloperCard({ lang, className, data }: { lang: Lang; className
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
             <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-background/70 shadow-[0_0_30px_var(--ai-glow)]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img src="/logo.png" alt={developer?.name || "Developer"} className="size-full object-cover" />
             </div>
             <div className="min-w-0">

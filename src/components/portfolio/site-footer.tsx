@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Mail, Github, Linkedin, Twitter, MapPin, UserRound, Share2, Copy, Contact2, Check } from "lucide-react";
+import { Mail, MapPin, UserRound, Share2, Copy, Contact2, Check } from "lucide-react";
+import { GithubIcon, LinkedinIcon, TwitterIcon } from "./brand-icons";
 import { Reveal } from "./section-utils";
 import { useContent } from "@/lib/content-store";
 import { DynamicContactForm } from "./dynamic-contact-form";
@@ -59,9 +60,9 @@ export function SiteFooter() {
             <Reveal delay={0.3}>
               <div className="mt-8 flex flex-wrap gap-3">
                 <SocialBtn href={`mailto:${f.email}`} icon={<Mail className="h-4 w-4" />} label={lang === "fa" ? "ایمیل" : "Email"} color="var(--gfx-1)" />
-                <SocialBtn href={f.github} icon={<Github className="h-4 w-4" />} label={lang === "fa" ? "گیت‌هاب" : "GitHub"} color="var(--sec-1)" />
-                <SocialBtn href={f.linkedin} icon={<Linkedin className="h-4 w-4" />} label={lang === "fa" ? "لینکدین" : "LinkedIn"} color="var(--ai-1)" />
-                <SocialBtn href={f.twitter} icon={<Twitter className="h-4 w-4" />} label={lang === "fa" ? "توییتر" : "Twitter"} color="var(--gfx-3)" />
+                <SocialBtn href={f.github} icon={<GithubIcon className="h-4 w-4" />} label={lang === "fa" ? "گیت‌هاب" : "GitHub"} color="var(--sec-1)" />
+                <SocialBtn href={f.linkedin} icon={<LinkedinIcon className="h-4 w-4" />} label={lang === "fa" ? "لینکدین" : "LinkedIn"} color="var(--ai-1)" />
+                <SocialBtn href={f.twitter} icon={<TwitterIcon className="h-4 w-4" />} label={lang === "fa" ? "توییتر" : "Twitter"} color="var(--gfx-3)" />
                 <ShareBtn email={f.email} />
                 <CopyEmailBtn email={f.email} />
                 <VCardBtn

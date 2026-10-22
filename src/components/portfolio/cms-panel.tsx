@@ -71,6 +71,7 @@ import {
   FileUp,
   DatabaseBackup,
   KeyRound,
+  Lock,
   LockKeyhole,
   Library,
   BarChart3,
@@ -107,6 +108,7 @@ import { CmsDefenseCenter } from "./cms-defense-center";
 import { CmsVisualBuilder } from "./cms-visual-builder";
 import { CmsFormDesigner } from "./cms-form-designer";
 import { Media3DPreview } from "./media-3d-preview";
+import { CmsSiteGuard } from "./cms-site-guard";
 
 /* ------------------------------------------------------------------ *
  * Section metadata (sidebar items) — bilingual labels
@@ -159,6 +161,7 @@ const MEDIA_SECTION_KEY = "media-library";
 const ANALYTICS_SECTION_KEY = "analytics";
 const DEFENSE_SECTION_KEY = "defense";
 const LICENSEMGMT_SECTION_KEY = "license-mgmt";
+const GUARD_SECTION_KEY = "access-guard";
 
 function DeveloperOwnerEditor({ lang, value, onSaved }: { lang: Lang; value: SiteContent["developer"]; onSaved: () => Promise<void> }) {
   const [key, setKey] = useState("");
@@ -554,7 +557,9 @@ function PwaSettingsEditor({ lang, value }: { lang: Lang; value: SiteContent["pw
     }
   };
 
-  const ColorField = ({ label, field }: { label: string; field: "themeColor" | "backgroundColor" }) => (
+  // Render helper (NOT a nested component — creating components during
+  // render remounts them on every keystroke).
+  const renderColorField = (label: string, field: "themeColor" | "backgroundColor") => (
     <div>
       <Label className="text-xs">{label}</Label>
       <div className="mt-1 flex items-center gap-2">
@@ -696,8 +701,8 @@ function PwaSettingsEditor({ lang, value }: { lang: Lang; value: SiteContent["pw
 
       <SubsectionBox title={fa ? "رنگ‌ها" : "Colors"} hint={fa ? "رنگ نوار سیستم و پس‌زمینه‌ی اسپلش" : "System bar color and splash background"}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ColorField label={fa ? "رنگ تم (themeColor)" : "Theme color"} field="themeColor" />
-          <ColorField label={fa ? "رنگ پس‌زمینه (backgroundColor)" : "Background color"} field="backgroundColor" />
+          {renderColorField(fa ? "رنگ تم (themeColor)" : "Theme color", "themeColor")}
+          {renderColorField(fa ? "رنگ پس‌زمینه (backgroundColor)" : "Background color", "backgroundColor")}
         </div>
       </SubsectionBox>
 
@@ -706,7 +711,7 @@ function PwaSettingsEditor({ lang, value }: { lang: Lang; value: SiteContent["pw
           {/* live preview of the generated icons */}
           <div className="flex items-center gap-3 sm:flex-col">
             {[draft.icon512, draft.icon192, draft.appleTouchIcon].filter(Boolean).map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
+               
               <img
                 key={`${src}-${i}`}
                 src={src}
@@ -4789,7 +4794,8 @@ export function CmsPanel() {
   const isAnalyticsSection = activeSection === ANALYTICS_SECTION_KEY;
   const isDefenseSection = activeSection === DEFENSE_SECTION_KEY;
   const isLicenseSection = activeSection === LICENSEMGMT_SECTION_KEY;
-  const isToolSection = isDeveloperSection || isMigrationSection || isMediaSection || isAnalyticsSection || isDefenseSection || isLicenseSection;
+  const isGuardSection = activeSection === GUARD_SECTION_KEY;
+  const isToolSection = isDeveloperSection || isMigrationSection || isMediaSection || isAnalyticsSection || isDefenseSection || isLicenseSection || isGuardSection;
 
   /* The active custom section object (or null when active is built-in). */
   const activeCustom = useMemo(
@@ -4993,6 +4999,10 @@ export function CmsPanel() {
   const defenseMatchesQuery = useMemo(() => {
     const q = query.trim().toLowerCase();
     return !q || "دفاع امنیت سد فایروال ربات تهدید بن بلاک defense firewall bot threat ban block waf security".includes(q);
+  }, [query]);
+  const guardMatchesQuery = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return !q || "قفل رمز پسورد گذاری بلور محافظت سایت بخش pin password lock protect guard privacy".includes(q);
   }, [query]);
 
   /* Lock background page scroll (incl. Lenis) while the CMS is open —
@@ -5467,6 +5477,8 @@ export function CmsPanel() {
       ? (lang === "fa" ? "مرکز سد دفاعی" : "Defense Center")
     : isLicenseSection
       ? (lang === "fa" ? "مدیریت لایسنس" : "License Manager")
+    : isGuardSection
+      ? (lang === "fa" ? "قفل رمز سایت و بخش‌ها" : "Access Guard")
     : activeIsBuiltin
       ? builtinLabel(activeSection, lang)
       : activeCustom?.label ?? activeSection;
@@ -5962,7 +5974,7 @@ export function CmsPanel() {
                     })}
                   </div>
 
-                  {(developerMatchesQuery || migrationMatchesQuery || mediaMatchesQuery || analyticsMatchesQuery || defenseMatchesQuery) && (
+                  {(developerMatchesQuery || migrationMatchesQuery || mediaMatchesQuery || analyticsMatchesQuery || defenseMatchesQuery || guardMatchesQuery) && (
                     <div className="flex gap-1 border-t border-border pt-2 lg:flex-col">
                       <p className="hidden px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 lg:block">
                         {lang === "fa" ? "سیستم و ابزارها" : "System & Tools"}
@@ -6093,10 +6105,35 @@ export function CmsPanel() {
                         </span>
                         <span className="ms-auto hidden font-mono text-[10px] text-muted-foreground/70 lg:inline">LIC</span>
                       </button>
+
+                      {/* Access Guard */}
+                      {guardMatchesQuery && <button
+                        onClick={() => {
+                          setActiveSection(GUARD_SECTION_KEY);
+                          setConfirmReset(false);
+                          setShowRaw(false);
+                          setConfirmDeleteKey(null);
+                          setRenamingKey(null);
+                          setIconPickerKey(null);
+                        }}
+                        className={cn(
+                          "flex w-full shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all",
+                          isGuardSection
+                            ? "bg-background text-foreground"
+                            : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                        )}
+                        style={isGuardSection ? { boxShadow: "inset 3px 0 0 var(--sec-1)" } : undefined}
+                      >
+                        <Lock className="size-4 shrink-0 text-[var(--sec-1)]" />
+                        <span className="whitespace-nowrap font-medium">
+                          {lang === "fa" ? "قفل رمز سایت و بخش‌ها" : "Access Guard"}
+                        </span>
+                        <span className="ms-auto hidden font-mono text-[10px] text-muted-foreground/70 lg:inline">GUARD</span>
+                      </button>}
                     </div>
                   )}
 
-                  {(filteredBuiltins.length === 0 && filteredCustoms.length === 0 && !developerMatchesQuery && !migrationMatchesQuery && !mediaMatchesQuery && !analyticsMatchesQuery && !defenseMatchesQuery && !isLicenseSection) && (
+                  {(filteredBuiltins.length === 0 && filteredCustoms.length === 0 && !developerMatchesQuery && !migrationMatchesQuery && !mediaMatchesQuery && !analyticsMatchesQuery && !defenseMatchesQuery && !guardMatchesQuery && !isLicenseSection && !isGuardSection) && (
                     <p className="px-3 py-4 text-xs italic text-muted-foreground">
                       {lang === "fa" ? "موردی یافت نشد" : "No matches"}
                     </p>
@@ -6197,6 +6234,8 @@ export function CmsPanel() {
                       <CmsDefenseCenter lang={lang} />
                 ) : isLicenseSection ? (
                       <LicenseManager lang={lang} />
+                ) : isGuardSection ? (
+                      <CmsSiteGuard lang={lang} />
                 ) : showRaw ? (
                   <RawJsonEditor value={draft} onApply={handleApplyRaw} />
                 ) : activeIsBuiltin ? (
@@ -6253,7 +6292,7 @@ export function CmsPanel() {
                 <span className="text-foreground">
                   {isDeveloperSection
                     ? (lang === "fa" ? "اطلاعات برنامه" : "application info")
-                    : isMigrationSection
+                    : isMigrationSection || isGuardSection
                     ? (lang === "fa" ? "ابزار سیستم" : "system tool")
                     : activeIsBuiltin
                     ? (lang === "fa" ? "ساخته‌شده" : "built-in")

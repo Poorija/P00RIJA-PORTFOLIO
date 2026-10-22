@@ -43,7 +43,7 @@ export function LightsOutGame() {
       submitBest(moves);
       fireAchievement("lights-out");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [solved]);
 
   const press = (i: number) => {

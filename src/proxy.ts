@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { gateRequest } from "@/lib/defense";
 import { readGateState } from "@/lib/licensing";
+import { isAuthenticatedRequest } from "@/lib/auth";
+import {
+  TARGET_SITE,
+  guardCookieName,
+  readProtection,
+  verifyUnlockToken,
+} from "@/lib/site-protection";
 
 /* ============================================================
  * P00RIJA defense proxy (Next.js 16 — proxy replaces middleware).
@@ -78,7 +85,47 @@ export async function proxy(req: NextRequest) {
     // A licensing hiccup must never take the site down on its own.
   }
 
-  // 2) Defense gate.
+  // 2) Site password gate (Access Guard) — when a whole-site password is
+  //    set, everything except the /gate page (and the auth/protection APIs
+  //    plus statics) is closed until the visitor unlocks. CMS admins and
+  //    holders of a valid site unlock cookie always pass.
+  try {
+    const protection = await readProtection();
+    if (protection.site.enabled && protection.site.hash) {
+      const unlocked = verifyUnlockToken(
+        TARGET_SITE,
+        req.cookies.get(guardCookieName(TARGET_SITE))?.value
+      );
+      if (!unlocked && !isAuthenticatedRequest(req)) {
+        const allowed =
+          path === "/gate" ||
+          path.startsWith("/api/protection") ||
+          path.startsWith("/api/auth") ||
+          path.startsWith("/_next") ||
+          path === "/favicon.ico" ||
+          path === "/logo.svg" ||
+          path === "/logo.png" ||
+          path.startsWith("/images/") ||
+          path.startsWith("/assets/");
+        if (!allowed) {
+          if (path.startsWith("/api/")) {
+            return NextResponse.json(
+              { ok: false, error: "Site is password-protected." },
+              { status: 503, headers: { "Cache-Control": "no-store" } }
+            );
+          }
+          return NextResponse.redirect(new URL("/gate", req.url), {
+            status: 307,
+            headers: { "Cache-Control": "no-store" },
+          });
+        }
+      }
+    }
+  } catch {
+    // The guard must never take the site down on its own.
+  }
+
+  // 3) Defense gate.
   try {
     const verdict = await gateRequest({ ip, ua, method: req.method, path });
     if (!verdict.allow) return blockResponse();

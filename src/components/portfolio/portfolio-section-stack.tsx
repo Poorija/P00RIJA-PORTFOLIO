@@ -14,6 +14,7 @@ import { SectionObjectLayer } from "@/components/portfolio/section-object-layer"
 import { SectionFormLayer } from "@/components/portfolio/section-form-layer";
 import { SectionResumeLayer } from "@/components/portfolio/section-resume-layer";
 import { SectionVisualLayer } from "@/components/portfolio/section-visual-layer";
+import { SectionGuardShell } from "@/components/portfolio/section-guard";
 import { cn } from "@/lib/utils";
 import { deviceContentOverride, deviceForWidth } from "@/lib/responsive-content";
 
@@ -112,11 +113,13 @@ export function PortfolioSectionStack() {
               data-builder-section={section.id}
               data-builder-hover={section.hoverEffect}
             >
-              {renderBuiltin()}
-              <SectionObjectLayer sectionId={section.id} />
-              <SectionFormLayer sectionId={section.id} />
-              <SectionResumeLayer sectionId={section.id} />
-              <SectionVisualLayer sectionId={section.id} />
+              <SectionGuardShell target={section.id} label={section.label}>
+                {renderBuiltin()}
+                <SectionObjectLayer sectionId={section.id} />
+                <SectionFormLayer sectionId={section.id} />
+                <SectionResumeLayer sectionId={section.id} />
+                <SectionVisualLayer sectionId={section.id} />
+              </SectionGuardShell>
             </div>
           );
         }
@@ -129,16 +132,18 @@ export function PortfolioSectionStack() {
           const customOverride = deviceContentOverride(builder, device, section.id);
           return (
             <div key={section.id} className="relative overflow-hidden">
-              <CustomSectionView
-                data={customOverride ?? baseCustom}
-                section={section}
-                accent={planet?.color}
-                lang={lang}
-              />
-              <SectionObjectLayer sectionId={section.id} />
-              <SectionFormLayer sectionId={section.id} />
-              <SectionResumeLayer sectionId={section.id} />
-              <SectionVisualLayer sectionId={section.id} />
+              <SectionGuardShell target={section.id} label={section.label}>
+                <CustomSectionView
+                  data={customOverride ?? baseCustom}
+                  section={section}
+                  accent={planet?.color}
+                  lang={lang}
+                />
+                <SectionObjectLayer sectionId={section.id} />
+                <SectionFormLayer sectionId={section.id} />
+                <SectionResumeLayer sectionId={section.id} />
+                <SectionVisualLayer sectionId={section.id} />
+              </SectionGuardShell>
             </div>
           );
         }

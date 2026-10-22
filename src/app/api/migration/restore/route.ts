@@ -75,7 +75,15 @@ export async function POST(request: NextRequest) {
     const compressed = Buffer.from(await request.arrayBuffer());
     if (!compressed.length || compressed.length > MAX_ARCHIVE_BYTES) throw new Error("Invalid backup size");
     const backup = parseArchive(compressed);
-    const { users, posts, content, authSettings, uploads } = backup.tables;
+    let { users, posts, content, authSettings, uploads } = backup.tables;
+
+    // The developer section carries the vendor identity. A restored backup
+    // (which anyone can craft offline) must NEVER overwrite it: drop the
+    // section from the incoming payload and re-create the current row after
+    // the wipe — same policy as the factory reset.
+    const developerRow = await db.content.findUnique({ where: { section: "developer" }, select: { data: true } });
+    content = content.filter((row) => row.section !== "developer");
+    const developerSeed = developerRow?.data ?? null;
 
     await db.$transaction(async (tx) => {
       await tx.post.deleteMany();
@@ -89,6 +97,7 @@ export async function POST(request: NextRequest) {
       if (content.length) await tx.content.createMany({ data: content.map((row) => ({ ...row, createdAt: date(row.createdAt), updatedAt: date(row.updatedAt) })) });
       if (authSettings.length) await tx.authSettings.createMany({ data: authSettings.map((row) => ({ ...row, createdAt: date(row.createdAt), updatedAt: date(row.updatedAt) })) });
       if (uploads.length) await tx.upload.createMany({ data: uploads.map((row) => ({ ...row, createdAt: date(row.createdAt), updatedAt: date(row.updatedAt) })) });
+      if (developerSeed) await tx.content.create({ data: { section: "developer", data: developerSeed } });
     });
 
     invalidateContent();

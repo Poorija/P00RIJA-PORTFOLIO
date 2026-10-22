@@ -322,7 +322,9 @@ export function useGameLoop(
   active: boolean
 ) {
   const cbRef = useRef(update);
-  cbRef.current = update;
+  useEffect(() => {
+    cbRef.current = update;
+  });
   const rafRef = useRef<number>(0);
   const lastRef = useRef<number>(0);
 
@@ -351,7 +353,9 @@ export function useGameKeys(
   preventDefaultKeys: string[] = []
 ) {
   const cbRef = useRef(handler);
-  cbRef.current = handler;
+  useEffect(() => {
+    cbRef.current = handler;
+  });
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
@@ -369,7 +373,7 @@ export function useGameKeys(
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [active, preventDefaultKeys.join(",")]);
 }
 
@@ -386,7 +390,9 @@ export function useCanvas(
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawRef = useRef(draw);
-  drawRef.current = draw;
+  useEffect(() => {
+    drawRef.current = draw;
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;

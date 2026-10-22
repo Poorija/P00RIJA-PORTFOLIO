@@ -15,6 +15,32 @@ function drawCard(exclude?: number): number {
 
 const SUITS = ["♠", "♥", "♦", "♣"];
 
+const suitFor = (v: number) => SUITS[v % 4];
+const isRed = (v: number) => suitFor(v) === "♥" || suitFor(v) === "♦";
+
+function CardFace({ value, dim }: { value: number; dim?: boolean }) {
+  return (
+    <motion.div
+      initial={{ rotateY: 90, opacity: 0 }}
+      animate={{ rotateY: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 260, damping: 24 }}
+      className="grid h-32 w-24 place-items-center rounded-2xl border-2 bg-surface-1"
+      style={{
+        borderColor: dim ? "var(--border)" : "color-mix(in oklch, var(--gfx-1) 50%, transparent)",
+        opacity: dim ? 0.55 : 1,
+        boxShadow: dim ? "none" : "0 0 26px -8px var(--gfx-1)",
+      }}
+    >
+      <span className="font-mono text-3xl font-black" style={{ color: isRed(value) ? "var(--destructive)" : "var(--foreground)" }}>
+        {value}
+      </span>
+      <span className="text-xl" style={{ color: isRed(value) ? "var(--destructive)" : "var(--foreground)" }}>
+        {suitFor(value)}
+      </span>
+    </motion.div>
+  );
+}
+
 export function HigherLowerGame() {
   const lang = useLang();
   const [best, submitBest] = useBestScore("highlow");
@@ -23,9 +49,6 @@ export function HigherLowerGame() {
   const [streak, setStreak] = useState(0);
   const [over, setOver] = useState(false);
   const [reveal, setReveal] = useState(false);
-
-  const suitFor = (v: number) => SUITS[v % 4];
-  const isRed = (v: number) => suitFor(v) === "♥" || suitFor(v) === "♦";
 
   const guess = useCallback(
     (dir: "higher" | "lower") => {
@@ -61,27 +84,6 @@ export function HigherLowerGame() {
     setOver(false);
     setReveal(false);
   }, []);
-
-  const CardFace = ({ value, dim }: { value: number; dim?: boolean }) => (
-    <motion.div
-      initial={{ rotateY: 90, opacity: 0 }}
-      animate={{ rotateY: 0, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 260, damping: 24 }}
-      className="grid h-32 w-24 place-items-center rounded-2xl border-2 bg-surface-1"
-      style={{
-        borderColor: dim ? "var(--border)" : "color-mix(in oklch, var(--gfx-1) 50%, transparent)",
-        opacity: dim ? 0.55 : 1,
-        boxShadow: dim ? "none" : "0 0 26px -8px var(--gfx-1)",
-      }}
-    >
-      <span className="font-mono text-3xl font-black" style={{ color: isRed(value) ? "var(--destructive)" : "var(--foreground)" }}>
-        {value}
-      </span>
-      <span className="text-xl" style={{ color: isRed(value) ? "var(--destructive)" : "var(--foreground)" }}>
-        {suitFor(value)}
-      </span>
-    </motion.div>
-  );
 
   return (
     <GameFrame

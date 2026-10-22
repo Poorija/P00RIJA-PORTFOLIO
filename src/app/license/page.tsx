@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { KeyRound, ShieldCheck, Wrench, Upload, Loader2, RefreshCw, Mail, Clock } from "lucide-react";
+import { VENDOR_EMAIL, VENDOR_WALLET } from "@/lib/vendor-identity";
 
 interface GateInfo {
   phase: "unlicensed" | "maintenance" | "active" | "disabled";
@@ -28,8 +29,7 @@ interface TrialInfo {
   expired: boolean;
 }
 
-const VENDOR_EMAIL = "p00rija@tutamail.com";
-const VENDOR_WALLET = "UQCEgGxRZ5A101w6RBNLwHhnva5EdK3kyDsFQcxni35DlCJf";
+// Official vendor identity — imported from the frozen vendor-identity module.
 
 function buildLicenseEmail(): string {
   const subject = encodeURIComponent("P00RIJA Portfolio — License Purchase Request");
@@ -163,7 +163,7 @@ export default function LicensePage() {
               boxShadow: "0 0 60px -12px oklch(0.55 0.15 265 / 0.5)",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src="/logo.png" alt="P00RIJA" className="size-full object-cover" />
           </div>
           {maintenance && <Wrench className="mx-auto mb-2 h-6 w-6 text-amber-300" />}

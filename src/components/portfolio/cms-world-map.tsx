@@ -150,7 +150,7 @@ export function WorldMap({
           return { ...c, x, y };
         })
         .filter((m): m is { name: string; value: number; x: number; y: number } => m !== null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [countries, serverCoords]
   );
 
@@ -174,7 +174,7 @@ export function WorldMap({
       .slice(0, 60);
     if (connArcs.length) return connArcs;
     return markers.map((m, i) => mkArc(m, i));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [markers, connections, serverX, serverY]);
 
   const styles: { id: MapStyle; fa: string; en: string }[] = [

@@ -2,7 +2,7 @@
 
 /* Mine Hunter — compact minesweeper (8×8, 10 mines), first click is safe. */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bomb } from "lucide-react";
 import { GameFrame, PlayButton, StatPill, fireAchievement, useBestScore, useLang } from "./shared";
@@ -67,6 +67,7 @@ export function MinesweeperGame() {
   const [best, submitBest] = useBestScore("mines", "low");
   const [cells, setCells] = useState<Cell[]>(blank);
   const [started, setStarted] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [status, setStatus] = useState<"playing" | "won" | "lost">("playing");
   const [seconds, setSeconds] = useState(0);
 
@@ -90,8 +91,7 @@ export function MinesweeperGame() {
     if (!started) {
       next = plant(next, i);
       setStarted(true);
-      const timer = setInterval(tickTimer, 1000);
-      (window as unknown as { __mineTimer?: ReturnType<typeof setInterval> }).__mineTimer = timer;
+      timerRef.current = setInterval(tickTimer, 1000);
     }
     if (next[i].mine) {
       next.forEach((c) => {
@@ -99,7 +99,7 @@ export function MinesweeperGame() {
       });
       setCells(next);
       setStatus("lost");
-      clearInterval((window as unknown as { __mineTimer?: ReturnType<typeof setInterval> }).__mineTimer);
+      { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }
       return;
     }
     floodOpen(next, i);
@@ -109,7 +109,7 @@ export function MinesweeperGame() {
       setStatus("won");
       submitBest(seconds || 1);
       fireAchievement("mine-hunter");
-      clearInterval((window as unknown as { __mineTimer?: ReturnType<typeof setInterval> }).__mineTimer);
+      { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }
     }
   };
 

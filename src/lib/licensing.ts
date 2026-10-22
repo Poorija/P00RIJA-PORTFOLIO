@@ -67,8 +67,22 @@ export interface LicenseGateState {
   usageLimit?: number | null;
 }
 
-const GRACE_CHECKS = Math.max(1, Number(process.env.LICENSE_GRACE_CHECKS ?? 2));
-const TRIAL_DAYS = Math.max(0, Number(process.env.LICENSE_TRIAL_DAYS ?? 5));
+// Hard caps on the tunables: an operator may make these STRICTER via env,
+// never looser. Without the caps, LICENSE_TRIAL_DAYS=99999 (or a giant
+// grace budget) would turn the trial into a permanent unlock.
+const GRACE_CHECKS = Math.min(Math.max(1, Math.floor(Number(process.env.LICENSE_GRACE_CHECKS ?? 2) || 2)), 24);
+const MAX_TRIAL_DAYS = 5;
+const trialEnvRaw = Number(process.env.LICENSE_TRIAL_DAYS);
+const TRIAL_DAYS = Number.isFinite(trialEnvRaw) ? Math.min(Math.max(0, Math.floor(trialEnvRaw)), MAX_TRIAL_DAYS) : MAX_TRIAL_DAYS;
+
+// Bookkeeping rows that share the licenseActivation table but are NOT
+// licenses. Every real-license lookup must exclude them — the __trial__
+// row is created with status "active", so an unfiltered findFirst() would
+// read it as a perpetual license and the trial lock would never engage.
+const META_LICENSE_IDS = ["__device__", "__trial__"] as const;
+function realLicenseWhere() {
+  return { licenseId: { notIn: [...META_LICENSE_IDS] } };
+}
 
 export function licensingEnabled(): boolean {
   // Trial mode: always enabled for the public/GitHub build — the 5-day
@@ -141,12 +155,110 @@ function edHelpers() {
   };
 }
 
+// ── stored-license integrity (v2 envelope) ───────────────────────────────────
+// The payload column stores { v: 2, env, data }: `env` is the ORIGINAL signed
+// envelope from the .lic file, `data` the working copy. Every gate read and
+// every heartbeat re-verifies the Ed25519 signature over env.ct with the
+// embedded vendor public key, re-decrypts it, and requires the commercial
+// terms in `data` to match the decrypted original exactly. Only `server`
+// may drift (the license server can push a new endpoint). Anything else —
+// direct SQLite edits, crafted rows, an expired license rewritten to
+// perpetual — fails verification and the install locks.
+
+interface StoredEnvelope {
+  iv: string;
+  ct: string;
+  tag: string;
+  sig: string;
+}
+interface StoredWrapper {
+  v: 2;
+  env: StoredEnvelope;
+  data: LicensePayload;
+}
+
+/** Commercial fields that must never drift from the signed original. */
+const SIGNED_TERMS: (keyof LicensePayload)[] = [
+  "licenseId", "licensee", "plan", "issuedAt", "expiresAt", "deviceLimit", "usageLimit", "features",
+];
+
+function hasVendorKeys(): boolean {
+  return Boolean(process.env.LICENSE_AES_KEY?.trim() && process.env.LICENSE_SIGN_PUBKEY?.trim());
+}
+
+export function verifyStoredLicense(row: { payload: string; signature: string }):
+  | { ok: false; legacy?: boolean }
+  | { ok: true; env: StoredEnvelope; data: LicensePayload } {
+  if (!hasVendorKeys()) return { ok: false }; // keys vanished after activation → lock
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.payload);
+  } catch {
+    return { ok: false };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { ok: false };
+  const wrapper = parsed as Partial<StoredWrapper> & { v?: number };
+  if (wrapper.v !== 2 || !wrapper.env || !wrapper.data) {
+    // Rows written by builds before the v2 wrapper: no envelope stored, so
+    // they can no longer be proven — require one-time re-activation.
+    return { ok: false, legacy: true };
+  }
+  const env = wrapper.env;
+  if (![env.iv, env.ct, env.tag, env.sig].every((x) => typeof x === "string" && x.length > 0)) {
+    return { ok: false };
+  }
+  const ct = Buffer.from(env.ct, "base64url");
+  if (!edHelpers().verifyEd25519(ct, Buffer.from(env.sig, "base64url"), signPubkey())) {
+    return { ok: false };
+  }
+  let plaintext: Buffer;
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", aesKey(), Buffer.from(env.iv, "base64url"));
+    decipher.setAuthTag(Buffer.from(env.tag, "base64url"));
+    plaintext = Buffer.concat([decipher.update(ct), decipher.final()]);
+  } catch {
+    return { ok: false };
+  }
+  let original: LicensePayload;
+  try {
+    original = JSON.parse(plaintext.toString("utf8"));
+  } catch {
+    return { ok: false };
+  }
+  for (const key of SIGNED_TERMS) {
+    if (JSON.stringify(original[key]) !== JSON.stringify(wrapper.data[key])) return { ok: false };
+  }
+  return { ok: true, env, data: wrapper.data };
+}
+
+function wrapForStorage(rawFile: string, payload: LicensePayload): string {
+  let envelope: { iv?: string; ct?: string; tag?: string; sig?: string } = {};
+  try {
+    envelope = JSON.parse(rawFile);
+  } catch {
+    /* parseLicenseFile already validated it — unreachable */
+  }
+  const wrapper: StoredWrapper = {
+    v: 2,
+    env: { iv: String(envelope.iv), ct: String(envelope.ct), tag: String(envelope.tag), sig: String(envelope.sig) },
+    data: payload,
+  };
+  return JSON.stringify(wrapper);
+}
+
 // ── activation & state ───────────────────────────────────────────────────────
 
-/** Persistent per-install UUID — the unit that multi-server licenses count. */
+/**
+ * Persistent per-install UUID — the unit that multi-server licenses count.
+ * The __trial__ row is bookkeeping, never a device source.
+ */
 export async function getOrCreateDeviceId(): Promise<string> {
-  const existing = await db.licenseActivation.findFirst({ select: { deviceId: true } });
-  if (existing) return existing.deviceId;
+  const rows = await db.licenseActivation.findMany({
+    where: { licenseId: { not: "__trial__" } },
+    select: { licenseId: true, deviceId: true },
+  });
+  const canonical = rows.find((r) => r.licenseId === "__device__") ?? rows[0];
+  if (canonical) return canonical.deviceId;
   // Reserve the UUID via a placeholder row; activation rewrites it into the
   // real license record (deviceId carries a UNIQUE index).
   const id = randomUUID();
@@ -156,7 +268,10 @@ export async function getOrCreateDeviceId(): Promise<string> {
     });
   } catch {
     // Lost a concurrent creation race — re-read.
-    const row = await db.licenseActivation.findFirst({ select: { deviceId: true } });
+    const row = await db.licenseActivation.findFirst({
+      where: { licenseId: { not: "__trial__" } },
+      select: { deviceId: true },
+    });
     if (row) return row.deviceId;
   }
   return id;
@@ -180,6 +295,9 @@ export async function activateLicense(rawFile: string): Promise<LicensePayload> 
   const envelopeSig = extractSig(rawFile);
   const expiresAt = payload.expiresAt ? new Date(payload.expiresAt) : null;
   if (expiresAt && expiresAt.getTime() < Date.now()) throw new Error("This license has already expired.");
+  // Store the v2 wrapper (original signed envelope + working copy) so every
+  // later gate read can re-verify the row against the vendor signature.
+  const storedPayload = wrapForStorage(rawFile, payload);
 
   // Free the UUID reservation placeholder so the real row can claim the same
   // deviceId (it carries a UNIQUE index).
@@ -188,7 +306,7 @@ export async function activateLicense(rawFile: string): Promise<LicensePayload> 
     where: { licenseId: payload.licenseId },
     update: {
       deviceId,
-      payload: JSON.stringify(payload),
+      payload: storedPayload,
       signature: envelopeSig,
       status: "active",
       failCount: 0,
@@ -198,7 +316,7 @@ export async function activateLicense(rawFile: string): Promise<LicensePayload> 
     create: {
       licenseId: payload.licenseId,
       deviceId,
-      payload: JSON.stringify(payload),
+      payload: storedPayload,
       signature: envelopeSig,
       status: "active",
       lastHeartbeatAt: new Date(),
@@ -301,14 +419,24 @@ export async function heartbeatTick(): Promise<LicenseGateState> {
   const gate = await readGateState();
   if (gate.phase === "disabled" || gate.phase === "unlicensed") return gate;
 
-  const row = await db.licenseActivation.findFirst();
+  const row = await db.licenseActivation.findFirst({ where: realLicenseWhere() });
   if (!row) return gate;
-  let payload: LicensePayload;
-  try {
-    payload = JSON.parse(row.payload);
-  } catch {
-    return gate;
+
+  // Re-verify the stored row against the vendor signature before trusting
+  // or reporting anything. Tampered/legacy rows lock immediately.
+  const verdict = verifyStoredLicense(row);
+  if (!verdict.ok) {
+    const reason = verdict.legacy
+      ? "License record format is from an older build — please re-activate your license file (one-time)."
+      : "License integrity check failed — the stored license was modified. Please re-activate with your original license file.";
+    await db.licenseActivation.update({
+      where: { id: row.id },
+      data: { status: "maintenance", lastServerMessage: reason },
+    });
+    invalidateGateCache();
+    return { ...gate, phase: "maintenance", reason };
   }
+  const { env, data: payload } = verdict;
 
   // Local expiry check works even when the license server is unreachable.
   const expiresAt = payload.expiresAt ? new Date(payload.expiresAt).getTime() : null;
@@ -361,7 +489,9 @@ export async function heartbeatTick(): Promise<LicenseGateState> {
         usageCount: Number.isFinite(usage) ? usage : row.usageCount,
         lastHeartbeatAt: new Date(),
         lastServerMessage: String(res.body.message ?? "ok"),
-        ...(payload.server ? { payload: JSON.stringify(payload) } : {}),
+        // Keep the v2 wrapper shape: env stays the signed original, only the
+        // working copy's `server` endpoint may change.
+        payload: JSON.stringify({ v: 2, env, data: payload } satisfies StoredWrapper),
       },
     });
     invalidateGateCache();
@@ -405,10 +535,35 @@ interface TrialInfo {
 
 /** Fixed trial-file path — always inside the app's data directory. */
 const TRIAL_FILE = "/app/db/.trial-stamp";
+/** Random per-install key created on first boot. A third anchor: resetting the
+ *  trial now requires wiping the DB row AND both files (the HMAC key under
+ *  the stamp changes, so a re-forged stamp with the old key fails). */
+const TRIAL_KEY_FILE = "/app/db/.trial-key";
+
+async function trialHmacKey(): Promise<string> {
+  const secret = process.env.AUTH_SECRET?.trim() || "trial-fallback";
+  try {
+    const fs = await import("fs");
+    let key = fs.readFileSync(TRIAL_KEY_FILE, "utf8").trim();
+    if (!/^[a-f0-9]{64}$/.test(key)) throw new Error("bad key");
+    return `${secret}:${key}`;
+  } catch {
+    try {
+      const fs = await import("fs");
+      const { randomBytes } = await import("crypto");
+      const key = randomBytes(32).toString("hex");
+      fs.mkdirSync("/app/db", { recursive: true });
+      fs.writeFileSync(TRIAL_KEY_FILE, key, { mode: 0o600 });
+      return `${secret}:${key}`;
+    } catch {
+      return secret; // non-writable FS (dev): fall back to AUTH_SECRET only
+    }
+  }
+}
 
 export async function getOrCreateTrialInfo(): Promise<TrialInfo> {
   const totalMs = TRIAL_DAYS * 24 * 3600 * 1000;
-  const secret = process.env.AUTH_SECRET?.trim() || "trial-fallback";
+  const secret = await trialHmacKey();
   const dbRow = await db.licenseActivation.findFirst({ where: { licenseId: "__trial__" } });
 
   let fileStamp = 0;
@@ -500,13 +655,13 @@ export async function readGateState(): Promise<LicenseGateState> {
   maybeTick();
   if (gateCache && Date.now() - gateCache.at < 10_000) return gateCache.state;
 
-  const row = await db.licenseActivation.findFirst();
-  if (!row || row.licenseId === "__device__") {
+  const row = await db.licenseActivation.findFirst({ where: realLicenseWhere() });
+  if (!row) {
     // ── TRIAL MODE (public/GitHub build) ──
     // No vendor keys + no license → run for TRIAL_DAYS from first boot.
     // After that, lock until a signed .lic file is activated.
-    const hasVendorKeys = Boolean(process.env.LICENSE_AES_KEY?.trim() && process.env.LICENSE_SIGN_PUBKEY?.trim());
-    if (!hasVendorKeys) {
+    const vendorKeysPresent = hasVendorKeys();
+    if (!vendorKeysPresent) {
       const trial = await getOrCreateTrialInfo();
       if (trial.remaining > 0) {
         gateCache = {
@@ -524,12 +679,13 @@ export async function readGateState(): Promise<LicenseGateState> {
     gateCache = { at: Date.now(), state: { phase: "unlicensed", reason: "No license activated." } };
     return gateCache.state;
   }
-  let payload: LicensePayload | null = null;
-  try {
-    payload = JSON.parse(row.payload);
-  } catch {
-    payload = null;
-  }
+
+  // A real license row exists — prove it against the vendor signature before
+  // its terms are believed. Verification failure = tamper (or a pre-v2 row):
+  // maintenance-lock with a re-activation prompt; only re-activating with a
+  // genuine .lic file clears it.
+  const verdict = verifyStoredLicense(row);
+  const payload = verdict.ok ? (verdict.data as LicensePayload) : null;
   const base = {
     licenseId: row.licenseId,
     licensee: payload?.licensee,
@@ -538,6 +694,13 @@ export async function readGateState(): Promise<LicenseGateState> {
     usageCount: row.usageCount,
     usageLimit: payload?.usageLimit ?? null,
   };
+  if (!verdict.ok) {
+    const reason = verdict.legacy
+      ? "License record format is from an older build — please re-activate your license file (one-time)."
+      : "License integrity check failed — the stored license was modified. Please re-activate with your original license file.";
+    gateCache = { at: Date.now(), state: { ...base, phase: "maintenance", reason } };
+    return gateCache.state;
+  }
   if (row.status !== "active") {
     gateCache = {
       at: Date.now(),

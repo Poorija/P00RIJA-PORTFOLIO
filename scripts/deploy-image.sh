@@ -63,6 +63,9 @@ note "Loading image and restarting the stack (remote)..."
 # interprets the script, and unquoted heredoc so local vars expand.
 ssh -p "$SSH_PORT" "$TARGET" bash -s <<REMOTE_SCRIPT
 set -eu
+# Non-root deploy users (e.g. pooriya) reach docker through passwordless sudo.
+if docker info >/dev/null 2>&1; then DOCKER="docker"; else DOCKER="sudo docker"; fi
+echo "• docker command: \$DOCKER"
 echo '• Checking server platform vs image...'
 server_arch=\$(uname -m)
 case "\$server_arch" in
@@ -72,15 +75,15 @@ case "\$server_arch" in
 esac
 echo "  server arch: \$server_arch (need linux/\$want)"
 echo '• Loading image...'
-docker load -i /tmp/p00rija-deploy-image.tar.gz
-loaded_arch=\$(docker image inspect $IMAGE_REF --format '{{.Architecture}}')
+\$DOCKER load -i /tmp/p00rija-deploy-image.tar.gz
+loaded_arch=\$(\$DOCKER image inspect $IMAGE_REF --format '{{.Architecture}}')
 if [ "\$loaded_arch" != "\$want" ]; then
   echo "ERROR: image architecture linux/\$loaded_arch does NOT match server linux/\$want — refusing to restart." >&2
   echo "Build with: docker build --platform linux/\$want ..." >&2
-  docker rmi "$IMAGE_REF" >/dev/null 2>&1 || true
+  \$DOCKER rmi "$IMAGE_REF" >/dev/null 2>&1 || true
   exit 1
 fi
-docker tag $IMAGE_REF p00rija/portfolio:local
+\$DOCKER tag $IMAGE_REF p00rija/portfolio:local
 rm -f /tmp/p00rija-deploy-image.tar.gz
 
 cd '$DEPLOY_DIR'
@@ -99,22 +102,22 @@ if [ -f docker-compose.override.yml ]; then
   OVERRIDE_FLAG="-f docker-compose.override.yml"
   echo "  (including docker-compose.override.yml)"
 fi
-docker compose -f "\$COMPOSE_FILE" \$OVERRIDE_FLAG up -d --no-build app || docker compose -f "\$COMPOSE_FILE" \$OVERRIDE_FLAG up -d --no-build
+\$DOCKER compose -f "\$COMPOSE_FILE" \$OVERRIDE_FLAG up -d --no-build app || \$DOCKER compose -f "\$COMPOSE_FILE" \$OVERRIDE_FLAG up -d --no-build
 echo '• Waiting for the container health check...'
 ok=0
 for i in \$(seq 1 45); do
-  status=\$(docker inspect --format='{{.State.Health.Status}}' p00rija-portfolio-web-app 2>/dev/null || docker inspect --format='{{.State.Health.Status}}' p00rija-portfolio 2>/dev/null || echo unknown)
+  status=\$(\$DOCKER inspect --format='{{.State.Health.Status}}' p00rija-portfolio-web-app 2>/dev/null || \$DOCKER inspect --format='{{.State.Health.Status}}' p00rija-portfolio 2>/dev/null || echo unknown)
   if [ "\$status" = healthy ]; then ok=1; break; fi
   sleep 2
 done
 if [ "\$ok" = 1 ]; then
   echo '✅ App container is healthy.'
 else
-  echo 'WARNING: health check did not pass within 90s — check: docker logs p00rija-portfolio-web-app' >&2
+  echo 'WARNING: health check did not pass within 90s — check: sudo docker logs p00rija-portfolio-web-app' >&2
   exit 1
 fi
 # Reclaim space from the superseded image layers.
-docker image prune -f >/dev/null 2>&1 || true
+\$DOCKER image prune -f >/dev/null 2>&1 || true
 REMOTE_SCRIPT
 
 echo

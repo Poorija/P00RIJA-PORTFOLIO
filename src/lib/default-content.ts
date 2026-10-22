@@ -802,7 +802,7 @@ function makeDefaultProfile(lang: "fa" | "en"): SiteContent["profile"] {
       : ["Extensible bilingual CMS", "Music-reactive 3D planetary system", "Fluid, secure and mobile-friendly experience"],
     avatar: "/logo.png",
     location: isFa ? "تهران، ایران" : "Tehran, Iran",
-    email: "mohammadmahdi.farhadianfard@gmail.com",
+    email: "p00rija@tutamail.com",
     phone: "",
     availability: isFa ? "آماده همکاری و پروژه جدید" : "Available for new projects",
     resumeUrl: "",
@@ -812,7 +812,7 @@ function makeDefaultProfile(lang: "fa" | "en"): SiteContent["profile"] {
       { id: "gh", platform: "GitHub", label: "GitHub", url: "https://github.com/Poorija", icon: "github" },
       { id: "li", platform: "LinkedIn", label: "LinkedIn", url: "https://linkedin.com", icon: "linkedin" },
       { id: "tw", platform: "X", label: "X / Twitter", url: "https://twitter.com", icon: "globe" },
-      { id: "ml", platform: "Email", label: "Email", url: "mailto:mohammadmahdi.farhadianfard@gmail.com", icon: "mail" },
+      { id: "ml", platform: "Email", label: "Email", url: "mailto:p00rija@tutamail.com", icon: "mail" },
     ],
     skills: [
       { id: "s1", label: isFa ? "طراحی گرافیک و هویت بصری" : "Graphic design & identity", level: 92, color: "#e84a9b" },
@@ -1182,7 +1182,7 @@ export const defaultContentFa: SiteContent = {
     description:
       "چه به دنبال هویت بصری، زیرساخت امن یا راهکار هوش مصنوعی باشید — خوشحال می‌شوم در مورد پروژه شما بشنوم.",
     location: "تهران، ایران · موجود برای دورکاری",
-    email: "mohammadmahdi.farhadianfard@gmail.com",
+    email: "p00rija@tutamail.com",
     github: "https://github.com/Poorija",
     linkedin: "https://linkedin.com",
     twitter: "https://twitter.com",
@@ -1525,8 +1525,8 @@ export const defaultContentEn: SiteContent = {
     description:
       "Whether you need a brand identity, secure infrastructure, or an AI solution — I'd love to hear about your project.",
     location: "Tehran, Iran · open to remote",
-    email: "hello@portfolio.dev",
-    github: "https://github.com",
+    email: "p00rija@tutamail.com",
+    github: "https://github.com/Poorija",
     linkedin: "https://linkedin.com",
     twitter: "https://twitter.com",
     copyright: "© 2026 — Built from three worlds.",

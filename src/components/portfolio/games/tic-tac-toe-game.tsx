@@ -63,7 +63,7 @@ export function TicTacToeGame() {
       fireAchievement("ttt-champion");
     } else if (!result) setRecord((r) => ({ ...r, d: r.d + 1 }));
     else setRecord((r) => ({ ...r, l: r.l + 1 }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [over]);
 
   // AI move

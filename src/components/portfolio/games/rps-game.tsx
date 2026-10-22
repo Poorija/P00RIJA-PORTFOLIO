@@ -72,7 +72,7 @@ export function RpsGame() {
       const timer = setTimeout(reset, 2600);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [score]);
 
   const matchOver = score.p >= WIN || score.ai >= WIN;

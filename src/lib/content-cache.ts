@@ -23,6 +23,7 @@ import {
   type Lang,
   type SiteContent,
 } from "@/lib/content-types";
+import { pinDeveloperData, sweepIdentityStrings } from "@/lib/vendor-identity";
 
 /** How long a cached entry is considered fresh. Content is public and only
  *  changes through the CMS — every write path calls invalidateContent(), so
@@ -90,10 +91,10 @@ function mergeContent(rows: { section: string; data: string }[]): PublicContent 
       continue;
     }
     if (isCustomKey(row.section)) {
-      custom[row.section] = {
+      custom[row.section] = sweepIdentityStrings({
         fa: parsed.fa && typeof parsed.fa === "object" ? parsed.fa : {},
         en: parsed.en && typeof parsed.en === "object" ? parsed.en : {},
-      };
+      });
       continue;
     }
     const section = row.section as SectionKey;
@@ -101,6 +102,17 @@ function mergeContent(rows: { section: string; data: string }[]): PublicContent 
     if (parsed.fa && typeof parsed.fa === "object") out.fa[section] = parsed.fa;
     if (parsed.en && typeof parsed.en === "object") out.en[section] = parsed.en;
   }
+  // Identity sweep: legacy/placeholder vendor strings (old default rows,
+  // stale DB data) never reach a visitor, and the developer section is
+  // pinned to the official vendor identity at the source.
+  for (const key of Object.keys(out.fa) as SectionKey[]) {
+    out.fa[key] = sweepIdentityStrings(out.fa[key]);
+  }
+  for (const key of Object.keys(out.en) as SectionKey[]) {
+    out.en[key] = sweepIdentityStrings(out.en[key]);
+  }
+  out.fa.developer = pinDeveloperData(out.fa.developer, "fa");
+  out.en.developer = pinDeveloperData(out.en.developer, "en");
   return { fa: out.fa as unknown as SiteContent, en: out.en as unknown as SiteContent, custom };
 }
 
@@ -142,8 +154,13 @@ export async function getContentSection(section: SectionKey): Promise<{ fa: unkn
     value = defaultContainerFor(section);
   }
 
-  store.sections.set(section, { value, storedAt: Date.now() });
-  return value;
+  store.sections.set(section, {
+    value: section === "developer"
+      ? { fa: pinDeveloperData(value.fa, "fa"), en: pinDeveloperData(value.en, "en") }
+      : { fa: sweepIdentityStrings(value.fa), en: sweepIdentityStrings(value.en) },
+    storedAt: Date.now(),
+  });
+  return store.sections.get(section)!.value;
 }
 
 /** Drop all cached content. Called after any admin write so the next read

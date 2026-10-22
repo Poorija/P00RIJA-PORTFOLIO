@@ -7,6 +7,7 @@
 //   - lang+data updates one language; meta (object) merges into the row's _meta
 
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { defaultContentFa, defaultContentEn } from "@/lib/default-content";
 import { blankContentFa, blankContentEn } from "@/lib/blank-content";
@@ -19,6 +20,8 @@ import {
 import { isAuthenticated } from "@/lib/auth";
 import { getContent, invalidateContent } from "@/lib/content-cache";
 import { isDeveloperOwnerUnlocked, lockDeveloperOwner } from "@/lib/developer-owner";
+import { pinDeveloperData } from "@/lib/vendor-identity";
+import { readProtection, unlockedTargetsFromCookies } from "@/lib/site-protection";
 
 function isSectionKey(value: unknown): value is SectionKey {
   return typeof value === "string" && (SECTION_KEYS as string[]).includes(value);
@@ -76,7 +79,48 @@ export async function GET(request: NextRequest) {
     // Cache-Control lets browsers/CDNs reuse the response too. Writes
     // invalidate the server cache immediately and the CMS clears the
     // browser-side caches on save, so a longer max-age is safe.
-    const content = await getContent();
+    let content = await getContent();
+
+    // Access Guard: locked sections never leave the server without a valid
+    // unlock cookie (or a CMS session). Stripped keys let the client fall
+    // back to the bundled template defaults — the blurred preview — while
+    // the real CMS content stays private. The strip runs on a SHALLOW COPY:
+    // getContent() hands out its shared cached object, and deleting keys on
+    // it would poison the cache for every subsequent request this TTL.
+    const protection = await readProtection();
+    const activeLocks = Object.entries(protection.sections)
+      .filter(([, lock]) => lock.enabled && lock.hash)
+      .map(([target]) => target);
+    let responsePrivate = false;
+    if (activeLocks.length > 0) {
+      const authed = await isAuthenticated();
+      if (!authed) {
+        const cookieStore = await cookies();
+        const unlocked = unlockedTargetsFromCookies(
+          protection.sections,
+          (name) => cookieStore.get(name)?.value
+        );
+        const fa = { ...(content.fa as unknown as Record<string, unknown>) };
+        const en = { ...(content.en as unknown as Record<string, unknown>) };
+        const custom = { ...(content.custom as Record<string, unknown>) };
+        for (const target of activeLocks) {
+          if (unlocked.has(target)) continue;
+          if (target in custom) delete custom[target];
+          if (target in fa) delete fa[target];
+          if (target in en) delete en[target];
+        }
+        content = {
+          fa: fa as unknown as typeof content.fa,
+          en: en as unknown as typeof content.en,
+          custom: custom as typeof content.custom,
+        };
+        responsePrivate = true;
+      } else {
+        // The admin variant differs from the anonymous one — never shareable.
+        responsePrivate = true;
+      }
+    }
+
     const cache = content.en.builder?.cache ?? content.fa.builder?.cache;
     const maxAge = cache?.enabled === false
       ? 0
@@ -88,9 +132,13 @@ export async function GET(request: NextRequest) {
       { ok: true, content },
       {
         headers: {
-          "Cache-Control": cache?.enabled === false
-            ? "no-store"
-            : `public, max-age=${maxAge}, stale-while-revalidate=${stale}`,
+          // With active locks the payload depends on the requester's cookies —
+          // shared caches must not store the stripped (or admin) variants.
+          "Cache-Control": responsePrivate
+            ? "private, max-age=30"
+            : cache?.enabled === false
+              ? "no-store"
+              : `public, max-age=${maxAge}, stale-while-revalidate=${stale}`,
         },
       }
     );
@@ -180,7 +228,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (lang !== undefined) {
-      current[lang] = data;
+      current[lang] = section === "developer" ? pinDeveloperData(data, lang) : data;
     }
     if (meta !== undefined) {
       const prevMeta = (current._meta && typeof current._meta === "object" && !Array.isArray(current._meta)

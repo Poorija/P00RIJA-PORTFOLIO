@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 /* ==================================================================
  * ProfileModal — opened by clicking the central sun ("this sun is me").
  * Shows the CMS-managed `profile` section: avatar, bio, skills with
@@ -9,12 +10,13 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Mail, MapPin, Download, Globe, Github, Linkedin, Sparkles, BadgeCheck, Orbit, Check } from "lucide-react";
+import { X, Mail, MapPin, Download, Globe, Sparkles, BadgeCheck, Orbit, Check } from "lucide-react";
+import { GithubIcon as Github, LinkedinIcon as Linkedin } from "./brand-icons";
 import { useContent } from "@/lib/content-store";
 import { useSuspendLenis } from "@/components/portfolio/smooth-scroll";
 import type { ProfileConfig, ProfileSocial } from "@/lib/content-types";
 
-const SOCIAL_ICONS: Record<string, typeof Globe> = {
+const SOCIAL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   github: Github,
   linkedin: Linkedin,
   mail: Mail,
