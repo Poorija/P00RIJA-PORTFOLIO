@@ -31,7 +31,10 @@ die() { printf '\033[31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 TARGET="${1:-${P00RIJA_DEPLOY_HOST:-}}"
 SSH_PORT="${2:-${P00RIJA_SSH_PORT:-22}}"
 DEPLOY_DIR="${P00RIJA_DEPLOY_DIR:-/opt/p00rija-portfolio}"
-IMAGE_REF="${P00RIJA_IMAGE_REF:-p00rija/portfolio:latest}"
+VERSION="$(sed -n 's/^export const APP_VERSION = "\(.*\)";/\1/p' src/lib/app-version.ts | head -n1)"
+# The image archive from make-clean-package.sh carries exactly one tag: the
+# versioned one. Default to it (latest/local are re-tagged remotely below).
+IMAGE_REF="${P00RIJA_IMAGE_REF:-p00rija/portfolio:v$VERSION}"
 
 if [ -z "$TARGET" ]; then
   read -r -p "Deploy target (user@host): " TARGET
