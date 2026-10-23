@@ -26,6 +26,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { useContent, type GuardLockInfo } from "@/lib/content-store";
+import { normalizeDigits } from "@/lib/persian-digits";
 import { cn } from "@/lib/utils";
 
 function isLockedFor(lock: GuardLockInfo | undefined, unlocked: string[], loaded: boolean): boolean {
@@ -33,16 +34,19 @@ function isLockedFor(lock: GuardLockInfo | undefined, unlocked: string[], loaded
   return Boolean(lock.enabled && lock.hasPassword !== false && !unlocked.includes(lock.target));
 }
 
-/* ---------------- unlock dialog ---------------- */
+/* ---------------- unlock dialog (shared by sections + galleries) ---------------- */
 
-function UnlockDialog({
+export function GuardUnlockDialog({
   lock,
   label,
   onClose,
+  onUnlocked,
 }: {
   lock: GuardLockInfo;
   label: string;
   onClose: () => void;
+  /** Fires when the password was accepted (before close). */
+  onUnlocked?: () => void;
 }) {
   const lang = useContent((s) => s.lang);
   const unlockGuard = useContent((s) => s.unlockGuard);
@@ -81,6 +85,7 @@ function UnlockDialog({
     const result = await unlockGuard(lock.target, password);
     setBusy(false);
     if (result.status === "ok") {
+      onUnlocked?.();
       onClose();
       return;
     }
@@ -188,9 +193,12 @@ function UnlockDialog({
                     maxLength={pinLength}
                     value={pin}
                     onChange={(v) => {
-                      setPin(v);
+                      // Persian keyboards emit ۰-۹ — normalize to ASCII so
+                      // the PIN matches what the server stored.
+                      const norm = normalizeDigits(v);
+                      setPin(norm);
                       setError(null);
-                      if (v.length === pinLength) void submit(v);
+                      if (norm.length === pinLength) void submit(norm);
                     }}
                     autoFocus
                     inputMode="numeric"
@@ -352,9 +360,61 @@ export function SectionGuardShell({
 
       <AnimatePresence>
         {dialogOpen && lock && (
-          <UnlockDialog lock={lock} label={displayLabel} onClose={() => setDialogOpen(false)} />
+          <GuardUnlockDialog lock={lock} label={displayLabel} onClose={() => setDialogOpen(false)} />
         )}
       </AnimatePresence>
     </div>
   );
+}
+
+/* ---------------- gallery gate ----------------
+ * Galleries are popups opened on demand, so instead of a blur shell the
+ * gate intercepts the OPEN action: while the `gallery:<sectionId>` lock
+ * is active, clicking a gallery button shows the unlock dialog first;
+ * after a successful unlock (which refetches the content with the
+ * previously-stripped gallery data) the popup opens as usual.
+ * Every section that has a gallery (graphics/security/ai/custom-*)
+ * gets its OWN independent lock. */
+
+export function useGalleryGate(sectionId: string, label: string) {
+  const lang = useContent((s) => s.lang);
+  const lock = useContent((s) => s.guardSections[`gallery:${sectionId}`]);
+  const unlocked = useContent((s) => s.guardUnlocked);
+  const guardLoaded = useContent((s) => s.guardLoaded);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const pendingOpen = useRef<(() => void) | null>(null);
+
+  const locked = isLockedFor(lock, unlocked, guardLoaded);
+
+  /** Wrap a gallery-open action: passes through when unlocked. */
+  const gate = (open: () => void) => {
+    if (!locked) {
+      open();
+      return;
+    }
+    pendingOpen.current = open;
+    setDialogOpen(true);
+  };
+
+  const fa = lang === "fa";
+  const displayLabel = `${fa ? "گالری" : "Gallery"} — ${label}`;
+
+  const node = (
+    <AnimatePresence>
+      {dialogOpen && lock && (
+        <GuardUnlockDialog
+          lock={lock}
+          label={displayLabel}
+          onClose={() => setDialogOpen(false)}
+          onUnlocked={() => {
+            const open = pendingOpen.current;
+            pendingOpen.current = null;
+            if (open) setTimeout(open, 120);
+          }}
+        />
+      )}
+    </AnimatePresence>
+  );
+
+  return { gate, node, lock, locked };
 }

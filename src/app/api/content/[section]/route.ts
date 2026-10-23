@@ -52,18 +52,27 @@ export async function GET(
     // Access Guard: a locked section's DB data is withheld from anyone
     // without a valid unlock cookie (CMS admins excepted) — serve the
     // bundled defaults instead, exactly like the stripped /api/content.
+    // A `gallery:<section>` lock strips only the gallery payload.
     const protection = await readProtection();
-    const lock = protection.sections[section];
+    const sectionLock = protection.sections[section];
+    const galleryLock = protection.sections[`gallery:${section}`];
     let data = await getContentSection(section);
-    if (lock?.enabled && lock.hash && !(await isAuthenticated())) {
-      const cookieStore = await cookies();
-      const unlocked = unlockedTargetsFromCookies(
-        protection.sections,
-        (name) => cookieStore.get(name)?.value
-      );
-      if (!unlocked.has(section)) {
-        data = { fa: DEFAULTS.fa[section], en: DEFAULTS.en[section] };
-      }
+    const cookieStore = await cookies();
+    const unlocked = unlockedTargetsFromCookies(
+      protection.sections,
+      (name) => cookieStore.get(name)?.value
+    );
+    const stripGalleryPayload = (payload: unknown) => {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+      return { ...(payload as Record<string, unknown>), gallery: undefined };
+    };
+    if (sectionLock?.enabled && sectionLock.hash && !(await isAuthenticated()) && !unlocked.has(section)) {
+      data = { fa: DEFAULTS.fa[section], en: DEFAULTS.en[section] };
+    } else if (
+      galleryLock?.enabled && galleryLock.hash &&
+      !(await isAuthenticated()) && !unlocked.has(`gallery:${section}`)
+    ) {
+      data = { fa: stripGalleryPayload(data.fa), en: stripGalleryPayload(data.en) };
     }
 
     if (isLang(langParam)) {

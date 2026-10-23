@@ -791,6 +791,10 @@ export interface CustomSectionData {
   ctaLabel: string;
   ctaUrl: string;
   badge: string;
+  /** Optional fullscreen project gallery — same config the graphics/
+   *  security/ai galleries use. Password-lockable per section via the
+   *  Access Guard target `gallery:custom-*`. */
+  gallery?: PortfolioGalleryConfig | null;
 }
 
 /* ============================================================

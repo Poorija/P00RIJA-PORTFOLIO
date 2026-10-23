@@ -1,184 +1,127 @@
+<div align="center">
+
+<img src="public/logo.png" alt="P00RIJA" width="96" height="96" />
+
 # P00RIJA Portfolio
 
-Interactive bilingual portfolio + full CMS built with **Next.js 16** (App Router, standalone output), React 19, Tailwind 4, Prisma/SQLite, Three.js and Lenis. Sized to run comfortably on a **1-core / 512 MB** VPS.
+**Interactive bilingual 3D portfolio · CMS · Arcade · Access Guard**
+**پورتفولیوی تعاملی دوزبانه‌ی سه‌بعدی · سیستم مدیریت محتوا · آرکید · قفل رمز**
 
-Developer contact: `p00rija@tutamail.com` · License: **Proprietary Commercial (see [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md))** — the Software runs only with a valid, signed license file; see *Licensing* below.
-نسخه‌ی فارسی: [README.fa.md](README.fa.md)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
+[![Node](https://img.shields.io/badge/Node-24-339933?logo=nodedotjs)](https://nodejs.org)
+[![License](https://img.shields.io/badge/license-commercial-important)](LICENSE-COMMERCIAL.md)
+
+`v3.3.1` · Next.js 16 (App Router · Turbopack · standalone) · React 19 · Tailwind 4 · Prisma 6/SQLite · Three.js · Lenis — **sized to run on a 1-core / 512 MB VPS** · Developer: [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com)
+
+</div>
+
+---
+
+## 🇬🇧 English
+
+A single-page, space-themed portfolio with a full built-in CMS. Three orbiting worlds — **Graphics · Security · AI** — plus a timeline, a synthesis finale and a contact deck. Everything (content, theme, forms, galleries, SEO, PWA) is editable live from the CMS; nothing is tracked before visitor consent; commercial builds are license-gated.
 
 > The public distribution starts in **Null mode** (`docker-compose.null.yml` / `P00RIJA_DISTRIBUTION_MODE=null`): no portfolio identity or sample content is shown until the owner signs in; only the immutable Developer card remains.
 
-## Highlights
+### ✨ Highlights
 
-- 🪐 **3D planetary navigation** across three worlds: Graphics · Security · AI
-- 🎮 **Galaxy Arcade** — 26 built-in games in a console-style overlay (header button, `G`, or `Ctrl/⌘+K`), pause with `Esc`, per-game high scores, RTL-safe controls
+- 🪐 **3D planetary navigation** — click a planet, dive into its world
+- 🖼 **Cinematic virtual galleries** — per-project media, specs and multi-links; a gallery can be added to **any** section
+- 🔐 **Access Guard** — password-protect the **whole site**, any **section**, or **each gallery independently**: 4/6-digit PIN or text password, **temporary passwords with auto-expiry**, attempt-limited locks (bank-card style disable), server-side content withholding, `/gate` site-wide screen
+- 🎮 **Galaxy Arcade** — 26 built-in games in a console-style overlay (header button or `G`), per-game high scores, RTL-safe controls
 - 💻 **Interactive security terminal** — ~70 commands, TAB completion, system/network/crypto tooling
-- 📊 **First-party Visitor Analytics** (CMS): sessions, duration, IP & Geo-IP, browser/device, referrers, 30-day charts, live world map with connection arcs — cookie-free, Do-Not-Track aware, **nothing tracked before consent**
-- 🛡 **Defense Center** — bot/scanner filtering, rate limiting, auto-bans, allow/block lists, live threat feed (Next 16 `proxy.ts`, zero dependencies)
+- 📊 **First-party visitor analytics** — sessions, duration, IP & Geo-IP, browser/device, referrers, 30-day charts, live world map; cookie-free, Do-Not-Track aware, **nothing tracked before consent**
+- 🛡 **Defense Center** — bot/scanner filtering, rate limiting, auto-bans, allow/block lists, live threat feed (Next 16 `proxy.ts`)
 - 🧩 **Full CMS** — every section, theme, gallery layouts, drag-drop forms (Telegram/WhatsApp/SMTP delivery), music player, 3D object factory, per-device content snapshots, SEO fields, media library with ffmpeg-backed editing
-- 🔐 Hardened auth — PBKDF2 password hash, optional TOTP 2FA, 3-strike login lockout, HMAC sessions
-- 🍪 **GDPR/CCPA consent gate** — external analytics (GA4, GTM, Hotjar, Plausible, Matomo, Cloudflare, HubSpot) load only after an explicit "analytics" consent
-- 📦 **One-file installer**, clean GitHub package, and a **clean zero-config Docker image**
+- 🔒 Hardened auth — PBKDF2 password hash, optional TOTP 2FA, login lockout, HMAC sessions · 🍪 GDPR/CCPA consent gate
+- 📦 One-file installer + clean zero-config Docker image
 
-## Licensing (vendor guide)
+### 📸 Screenshots
 
-The commercial build is **locked until a signed license file is activated**, and it checks in with the license server every 10 minutes — if the license is revoked/expired (or the server stays unreachable beyond the grace window), the whole site switches to a maintenance screen and automatically recovers when the license becomes valid again.
+| Hero — planetary system | Graphics world | Security world | AI world |
+|:---:|:---:|:---:|:---:|
+| ![Hero](screenshots/hero.png) | ![Graphics](screenshots/graphics.png) | ![Security](screenshots/security.png) | ![AI](screenshots/ai-section.png) |
 
-**One-time vendor setup** (on YOUR machine):
+| Timeline | Synthesis finale | Galaxy Arcade | Pixel Buddy assistant |
+|:---:|:---:|:---:|:---:|
+| ![Timeline](screenshots/timeline.png) | ![Synthesis](screenshots/synthesis.png) | ![Arcade](screenshots/arcade.png) | ![Pixel Buddy](screenshots/pixel-buddy.png) |
 
-```bash
-node scripts/license-cli.mjs keygen        # → LICENSE_AES_KEY, LICENSE_SIGN_PRIVKEY (secret), LICENSE_SIGN_PUBKEY
-```
-
-Bake `LICENSE_AES_KEY` + `LICENSE_SIGN_PUBKEY` into the SOLD image's env (never into the public image) — licensing is completely OFF when these are absent (dev/public builds stay unlocked).
-
-**Run the license server** (your box; Docker-based so it never conflicts with other services; the container listens directly on the host's main network interface via `network_mode: host`, so customer installs on OTHER servers reach it at `http://<this-server>:<PORT>`):
+### 🚀 Quick start
 
 ```bash
-# option A — prebuilt archive (no build on the server):
-docker load -i p00rija-license-server-v<version>-amd64.tar.gz
-# option B — build from source:
-#   docker compose -f docker-compose.license.yml up -d --build
-# set ADMIN_TOKEN + LICENSE_PORT (default 7800) in a .env next to the compose file:
-echo 'LICENSE_ADMIN_TOKEN=a-long-random-token'  > .env
-echo 'LICENSE_PORT=7800'                       >> .env
-docker compose -f docker-compose.license.yml up -d
-# graphical dashboard: http://<host>:7800/admin
+cp .env.example .env          # set AUTH_SECRET + ADMIN_PASSWORD
+docker compose -f docker-compose.hub.yml up -d     # or docker-compose.null.yml (blank mode)
+# http://localhost:7890 → gear icon in the header → log in → build your site
 ```
 
-**Issue a license** (everything — duration, slots, usage, server URL/port — is set by you; the license file carries the full server config inside):
+Local dev: `docker compose -f docker-compose.dev.yml up -d` → http://127.0.0.1:7890
+
+<details>
+<summary>Production deploy (build locally, ship an image — the server never builds)</summary>
 
 ```bash
-export LICENSE_AES_KEY=… LICENSE_SIGN_PRIVKEY=… \
-       LICENSE_ADMIN_URL=http://127.0.0.1:7800 LICENSE_ADMIN_TOKEN=…
-node scripts/license-cli.mjs create --licensee "Acme" --plan annual \
-  --devices 2 --uses 100000 --server-url http://licenses.acme-host --server-port 7800 \
-  --out acme.lic          # also register it server-side (same id) via dashboard or CLI
-node scripts/license-cli.mjs list|show|revoke|suspend|activate|extend|set|reset-devices --license-id P00-…
+bash scripts/make-clean-package.sh --image      # clean source + linux/amd64 image tar
+bash scripts/deploy-image.sh user@your-server   # load + restart + health check
 ```
+</details>
 
-**Customer side:** the locked site serves only `/license` — upload the `.lic` file (or paste its content) and the site opens. Each install gets a unique UUID that the server counts against the license's slot limit; heartbeats every 10 minutes keep it alive.
+---
 
-Full legal text: [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+## 🇮🇷 فارسی
 
-## Automatic installation
+پورتفولیوی تک‌صفحه‌ای با حال‌وهوای فضایی و **CMS کامل داخلی**. سه سیاره‌ی مداری — **گرافیک · امنیت · هوش مصنوعی** — به‌همراه خط زمانی، بخش ترکیب و دک تماس. همه‌چیز (محتوا، تم، فرم‌ها، گالری‌ها، سئو، PWA) از داخل CMS و به‌صورت زنده قابل ویرایش است؛ هیچ داده‌ای قبل از رضایت بازدیدکننده ثبت نمی‌شود؛ نسخه‌ی تجاری فقط با لایسنس معتبر اجرا می‌شود.
 
-### Local Docker installation
+> توزیع عمومی در **حالت خالی (Null)** شروع می‌شود: تا زمان ورود مالک، هیچ محتوا یا هویتی نمایش داده نمی‌شود؛ فقط کارت سازنده (غیرقابل تغییر) باقی می‌ماند.
+
+### ✨ امکانات کلیدی
+
+- 🪐 **ناوبری سیاره‌ای سه‌بعدی** — روی سیاره کلیک کنید و به دنیای آن شیرجه بزنید
+- 🖼 **گالری‌های مجازی سینمایی** — رسانه، مشخصات و چند لینک برای هر پروژه؛ افزودن گالری به **هر بخش دلخواه**
+- 🔐 **قفل رمز (Access Guard)** — پسورد روی **کل سایت**، هر **بخش** یا **هر گالری به‌صورت مستقل**: رمز ۴/۶ رقمی یا متنی، **رمز موقت با انقضای خودکار**، حالت سقف تلاش (غیرفعال‌شدن مثل کارت بانکی)، حذف محتوای واقعی از سمت سرور تا وارد کردن رمز، صفحه‌ی `/gate` برای قفل کل سایت
+- 🎮 **مرکز بازی (Galaxy Arcade)** — ۲۶ بازی داخلی در اورلی کنسولی (دکمه‌ی هدر یا کلید `G`)، رکورد شخصی برای هر بازی، سازگار با راست‌به‌چپ
+- 💻 **ترمینال امنیت تعاملی** — حدود ۷۰ دستور با تکمیل TAB
+- 📊 **آمار بازدیدکننده‌ی اختصاصی** — نشست‌ها، مدت حضور، موقعیت جغرافیایی، مرورگر/دستگاه، نمودار ۳۰ روزه، نقشه‌ی زنده؛ بدون کوکی، با احترام به Do-Not-Track و **بدون ثبت هیچ داده‌ای قبل از رضایت**
+- 🛡 **مرکز سد دفاعی** — بلاک ربات/اسکنر، محدودیت نرخ، بن خودکار، فهرست‌های بلاک/مجاز، فید زنده تهدیدها
+- 🧩 **CMS کامل** — سکشن‌ها، تم، چیدمان گالری، فرم‌ساز کشیدنی (تحویل تلگرام/واتساپ/SMTP)، پخش‌کننده موسیقی، کارخانه شیء سه‌بعدی، محتوای تفکیک‌شده برای هر دستگاه، سئو، کتابخانه رسانه با ویرایش ffmpeg
+- 🔒 احراز هویت سخت‌شده — هش PBKDF2، کد دوعاملی اختیاری، قفل لاگین، نشست‌های HMAC · 🍪 دروازه رضایت GDPR/CCPA
+- 📦 نصب‌کننده‌ی تک‌فایلی + ایمیج داکر تمیز و بدون نیاز به تنظیم
+
+### 📸 اسکرین‌شات‌ها
+
+| صفحه اصلی | دنیای گرافیک | دنیای امنیت | دنیای هوش مصنوعی |
+|:---:|:---:|:---:|:---:|
+| ![صفحه اصلی](screenshots/hero.png) | ![گرافیک](screenshots/graphics.png) | ![امنیت](screenshots/security.png) | ![هوش مصنوعی](screenshots/ai-section.png) |
+
+| خط زمانی | ترکیب | آرکید | همدم پیکسلی |
+|:---:|:---:|:---:|:---:|
+| ![خط زمانی](screenshots/timeline.png) | ![ترکیب](screenshots/synthesis.png) | ![آرکید](screenshots/arcade.png) | ![همدم](screenshots/pixel-buddy.png) |
+
+### 🚀 شروع سریع
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Poorija/P00RIJA-PORTFOLIO/main/scripts/install-from-github.sh | sudo -E bash
+cp .env.example .env          # مقادیر AUTH_SECRET و ADMIN_PASSWORD را تنظیم کنید
+docker compose -f docker-compose.hub.yml up -d     # یا docker-compose.null.yml (حالت خالی)
+# http://localhost:7890 → آیکون چرخ‌دنده در هدر → ورود → ساخت سایت
 ```
 
-The bootstrap checks prerequisites, installs Docker when needed, clones the repo to `/opt/p00rija-portfolio`, creates persistent storage, detects CPU/RAM, and starts the app.
+توسعه‌ی محلی: `docker compose -f docker-compose.dev.yml up -d` → http://127.0.0.1:7890
 
-### Production domain with HTTPS
-
-Point the domain's DNS A/AAAA record to the server, then:
+<details>
+<summary>دیپلوی پروداکشن (بیلد محلی، ارسال ایمیج — سرور هرگز بیلد نمی‌کند)</summary>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Poorija/P00RIJA-PORTFOLIO/main/scripts/install-from-github.sh -o /tmp/p00rija-install.sh
-sudo env \
-  P00RIJA_DOMAIN='portfolio.example.com' \
-  P00RIJA_PUBLIC_PORT='443' \
-  P00RIJA_SSL_MODE='le' \
-  P00RIJA_LE_EMAIL='admin@example.com' \
-  P00RIJA_ADMIN_PASSWORD='replace-this-password' \
-  bash /tmp/p00rija-install.sh
+bash scripts/make-clean-package.sh --image      # پکیج تمیز + ایمیج linux/amd64
+bash scripts/deploy-image.sh user@your-server   # بارگذاری + ری‌استارت + بررسی سلامت
 ```
+</details>
 
-This installs behind Nginx, redirects HTTP→HTTPS, issues a Let's Encrypt certificate and enables auto-renewal. For local testing use `P00RIJA_SSL_MODE=self-signed`.
+---
 
-## ⚠️ Default CMS password
+## 🔐 Licensing · لایسنس
 
-The default CMS admin password is **`admin123`** — a public, documented default that exists only so the app boots with zero configuration. **Anyone can log into your CMS with it until you change it.**
+The commercial build **runs only with a valid signed license** (`.lic` — AES-256-GCM + Ed25519), verified on activation, on every request, and through a 10-minute heartbeat to the vendor's license server; revocation, expiry or a burned-out grace window switches the site to a maintenance screen and it recovers automatically. Vendors: see [`scripts/license-cli.mjs`](scripts/license-cli.mjs) and [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
-- The interactive installer **asks** for a password during installation (leave empty = accept the default).
-- Docker users: start the container with `-e ADMIN_PASSWORD="your-strong-password"`, or change the password from the CMS settings after the first login.
-- On first boot a `CMS-PASSWORD.txt` notice is written next to the database.
-- Reference: [`DEFAULT-CMS-PASSWORD.txt`](DEFAULT-CMS-PASSWORD.txt), [`.env.example`](.env.example).
+نسخه‌ی تجاری **فقط با فایل لایسنس امضاشده‌ی معتبر** اجرا می‌شود؛ لغو لایسنس، انقضا یا قطعی طولانی سرور، سایت را به حالت نگهداری می‌برد و با معتبر شدن دوباره به‌صورت خودکار بازیابی می‌شود.
 
-## Manual installation
-
-```bash
-git clone https://github.com/Poorija/P00RIJA-PORTFOLIO.git
-cd P00RIJA-PORTFOLIO
-cp .env.example .env      # set ADMIN_PASSWORD + AUTH_SECRET (openssl rand -hex 32)
-```
-
-Then choose one:
-
-**Prebuilt Null image (zero config):**
-
-```bash
-docker compose -f docker-compose.null.yml pull   # or: docker load -i <archive>
-docker compose -f docker-compose.null.yml up -d
-```
-
-**Full clean image (zero config):**
-
-```bash
-docker load -i p00rija-portfolio-image-v<version>.tar.gz   # or: docker pull p00rija/portfolio:latest
-docker compose -f docker-compose.hub.yml up -d
-# → http://localhost:3000
-```
-
-**Build from source:**
-
-```bash
-npm ci
-npx prisma generate && npx prisma db push
-npm run build
-sudo bash install.sh --docker     # or the interactive wizard: sudo bash install.sh --web
-```
-
-Development with hot reload: `docker compose -f docker-compose.dev.yml up --build` → `http://127.0.0.1:7890`.
-
-## Configuration (environment)
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `ADMIN_PASSWORD` | `admin123` ⚠️ | CMS login — change immediately; a password set from the CMS (hash) takes precedence |
-| `AUTH_SECRET` | auto in Docker / required natively | HMAC key for CMS sessions |
-| `DATABASE_URL` | `file:/app/db/custom.db` | SQLite location |
-| `PORT` | `3000` | HTTP port |
-| `P00RIJA_DISTRIBUTION_MODE` | `null` (public installers) | `null` hides portfolio identity/content until the owner signs in |
-| `P00RIJA_CPUS` / `P00RIJA_MEMORY_LIMIT` | host-detected | Container resource caps |
-| `SMTP_PASS` | — | SMTP secret for the contact form's server-side delivery |
-
-## CMS, Factory Reset, Backup
-
-Open the CMS from the header and sign in. The visual builder supports movable/resizable/rotatable 3D objects, per-device (Automatic/Desktop/Tablet/Mobile) content snapshots with inheritance, a media & icon library (crop/resize/WebP/video-trim/GLB previews), drag-and-drop multi-step forms, named versions and undo/redo. **Factory Reset** returns the app to a blank Null canvas while preserving only the immutable Developer card.
-
-**CMS → Migration & Backup** downloads a complete `.p00backup.gz` (content, uploads, password hash, 2FA) and restores it on any other instance; `scripts/migrate.sh` performs host-to-host migration.
-
-## Building the distribution artifacts
-
-```bash
-bash scripts/make-clean-package.sh --image
-```
-
-Produces in `dist/`:
-
-- `p00rija-portfolio-clean-v<version>.tar.gz` / `.zip` — **source-only package for GitHub**: no `.env`, no database, no uploads, no build output (verified by built-in sanity checks); ships with `DEFAULT-CMS-PASSWORD.txt` and the installer
-- `p00rija-portfolio-image-v<version>.tar.gz` — **clean production image** for `docker load` / Docker Hub (`docker push p00rija/portfolio:v<version>`)
-
-The image is built FROM the staged clean directory, so no secret can leak into any layer.
-
-## Deploying updates to a small server
-
-The production server never builds (1 core / 512 MB) — ship the prebuilt image:
-
-```bash
-bash scripts/deploy-image.sh user@server 22
-```
-
-## Updating and diagnostics
-
-```bash
-sudo bash install.sh --status
-sudo bash install.sh --update-docker
-docker logs --tail 200 p00rija-portfolio
-```
-
-Never commit `.env`, backups, database files, or private keys.
-
-More docs: [DEPLOYMENT.md](DEPLOYMENT.md) · [PROJECT_DOCS.md](PROJECT_DOCS.md) (architecture, Persian)
+**© P00RIJA** · [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com) · Proprietary Commercial — see [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)

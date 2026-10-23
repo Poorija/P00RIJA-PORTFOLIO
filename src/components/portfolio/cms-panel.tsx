@@ -39,6 +39,7 @@ import {
   X,
   Plus,
   Trash2,
+  Frame,
   Save,
   Loader2,
   LogOut,
@@ -4633,6 +4634,7 @@ function CustomSectionForm({
   setDraft: (v: Record<string, unknown>) => void;
 }) {
   const set = (k: string, v: unknown) => setDraft({ ...draft, [k]: v });
+  const lang = useContent((s) => s.lang);
   const title = typeof draft.title === "string" ? draft.title : "";
   const subtitle = typeof draft.subtitle === "string" ? draft.subtitle : "";
   const body = typeof draft.body === "string" ? draft.body : "";
@@ -4646,6 +4648,10 @@ function CustomSectionForm({
           : {}
       )
     : [];
+  const gallery =
+    draft.gallery && typeof draft.gallery === "object" && !Array.isArray(draft.gallery)
+      ? (draft.gallery as SiteContent["graphics"]["gallery"])
+      : null;
 
   return (
     <FormShell section={section.key} title={section.label} customNote>
@@ -4693,6 +4699,39 @@ function CustomSectionForm({
         items={items}
         onChange={(x) => set("items", x)}
       />
+
+      {/* Optional fullscreen gallery — same editor as the builtin sections.
+          Enabled the moment a title or any project exists. */}
+      {gallery ? (
+        <>
+          <PortfolioGalleryFields
+            value={gallery}
+            onChange={(next) => set("gallery", next)}
+            lang={lang}
+          />
+          <Button type="button" size="sm" variant="ghost" onClick={() => set("gallery", null)}>
+            <Trash2 className="size-3.5" />
+            {lang === "fa" ? "حذف گالری از این بخش" : "Remove gallery from this section"}
+          </Button>
+        </>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            set("gallery", {
+              title: section.label,
+              subtitle: "",
+              enterLabel: lang === "fa" ? "ورود به گالری سه‌بعدی" : "Enter the virtual gallery",
+              projects: [],
+            })
+          }
+        >
+          <Frame className="size-3.5" />
+          {lang === "fa" ? "افزودن گالری به این بخش" : "Add a gallery to this section"}
+        </Button>
+      )}
     </FormShell>
   );
 }

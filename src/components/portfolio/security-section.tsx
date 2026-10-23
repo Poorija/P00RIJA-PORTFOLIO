@@ -19,6 +19,7 @@ import type { GalleryLayout } from "@/lib/content-types";
 import { useContent } from "@/lib/content-store";
 import { Ambient3DObject } from "./ambient-3d-object";
 import { VirtualGallery } from "./virtual-gallery";
+import { useGalleryGate } from "./section-guard";
 
 const SKILL_ICONS = [Terminal, Network, ShieldCheck, Server, Lock, GitBranch];
 
@@ -27,6 +28,7 @@ export function SecuritySection() {
   const lang = useContent((st) => st.lang);
   const orbitObject = useContent((st) => st.content.design?.objects?.find((object) => object.slot === "security-ambient"));
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const securityGallery = useGalleryGate("security", "Security");
 
   return (
     <section
@@ -64,7 +66,7 @@ export function SecuritySection() {
         <div data-cms-node="heading"><SectionHeading index={s.index} kickerEn={s.kicker} accent="var(--sec-1)" title={s.title} highlight={s.highlight} subtitle={s.subtitle} /></div>
 
         <Reveal delay={0.08}>
-          <button data-cms-node="gallery-button" onClick={() => setGalleryOpen(true)} className="mb-8 flex items-center gap-2 rounded-2xl border border-[var(--sec-1)]/35 bg-[var(--sec-1)]/5 px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[var(--sec-1)]/10">
+          <button data-cms-node="gallery-button" onClick={() => securityGallery.gate(() => setGalleryOpen(true))} className="mb-8 flex items-center gap-2 rounded-2xl border border-[var(--sec-1)]/35 bg-[var(--sec-1)]/5 px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[var(--sec-1)]/10">
             <Frame className="h-4 w-4 text-[var(--sec-1)]" />
             {s.gallery?.enterLabel}
           </button>
@@ -178,7 +180,8 @@ export function SecuritySection() {
         </div>
       </div>
 
-      <AnimatePresence>{galleryOpen && s.gallery && <VirtualGallery layout={( s.gallery as { layout?: GalleryLayout }).layout} projects={s.gallery.projects} title={s.gallery.title} subtitle={s.gallery.subtitle} onClose={() => setGalleryOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{securityGallery.node}
+        {galleryOpen && s.gallery && <VirtualGallery layout={( s.gallery as { layout?: GalleryLayout }).layout} projects={s.gallery.projects} title={s.gallery.title} subtitle={s.gallery.subtitle} onClose={() => setGalleryOpen(false)} />}</AnimatePresence>
     </section>
   );
 }

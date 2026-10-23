@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { normalizeDigits } from "@/lib/persian-digits";
 
 /* ============================================================
  * Site & section password protection ("Access Guard").
@@ -49,6 +50,10 @@ export interface LockConfig {
   disabledAt: number | null;
   /** scrypt hash; empty string = no password set yet */
   hash: string;
+  /** OPTIONAL temporary password (scrypt hash) — unlocks too, but only… */
+  tempHash: string;
+  /** …until this epoch ms. 0 = no temporary password armed. */
+  tempExpiresAt: number;
   /** how many days an unlock cookie lasts (0 = browser session) */
   unlockDays: number;
   updatedAt: number;
@@ -70,6 +75,8 @@ export interface PublicLockInfo {
   failedAttempts: number;
   disabled: boolean;
   hasPassword: boolean;
+  hasTempPassword: boolean;
+  tempExpiresAt: number;
   unlockDays: number;
   updatedAt: number;
 }
@@ -83,6 +90,8 @@ export function emptyLock(): LockConfig {
     failedAttempts: 0,
     disabledAt: null,
     hash: "",
+    tempHash: "",
+    tempExpiresAt: 0,
     unlockDays: 7,
     updatedAt: 0,
   };
@@ -145,10 +154,17 @@ const SITE_KEYS_LOCKABLE = new Set([
   "hero", "graphics", "security", "ai", "timeline", "synthesis", "footer",
 ]);
 
+/** Gallery lock target: `gallery:<ownerSectionId>` — one lock per gallery
+ *  usage, wherever that gallery lives (a builtin section or custom-*). */
+export function galleryTargetOf(sectionId: string): string {
+  return `gallery:${sectionId}`;
+}
+
 export function isValidTarget(target: string): boolean {
   return target === TARGET_SITE
     || SITE_KEYS_LOCKABLE.has(target)
-    || /^custom-[a-zA-Z0-9-]{1,96}$/.test(target);
+    || /^custom-[a-zA-Z0-9-]{1,96}$/.test(target)
+    || /^gallery:[a-zA-Z0-9-]{1,96}$/.test(target);
 }
 
 function lockFor(state: ProtectionState, target: string): LockConfig | null {
@@ -164,6 +180,7 @@ export function lockIsActive(lock: LockConfig | null | undefined): boolean {
 /* ---------------- public snapshot ---------------- */
 
 function toPublicInfo(target: string, lock: LockConfig): PublicLockInfo {
+  const tempAlive = Boolean(lock.tempHash) && lock.tempExpiresAt > Date.now();
   return {
     target,
     enabled: lock.enabled,
@@ -173,6 +190,8 @@ function toPublicInfo(target: string, lock: LockConfig): PublicLockInfo {
     failedAttempts: lock.failedAttempts,
     disabled: lock.disabledAt !== null && lock.disabledAt > 0,
     hasPassword: Boolean(lock.hash),
+    hasTempPassword: tempAlive,
+    tempExpiresAt: lock.tempExpiresAt,
     unlockDays: lock.unlockDays,
     updatedAt: lock.updatedAt,
   };
@@ -221,10 +240,11 @@ function verifyGuardPassword(password: string, encoded: string): boolean {
   }
 }
 
-/** Server-side policy for a candidate password of a given kind. */
+/** Server-side policy for a candidate password of a given kind.
+ *  PIN kinds normalize Persian/Arabic digits first («۷۳۰۴» == "7304"). */
 export function validateGuardPassword(kind: LockKind, password: string): string | null {
-  if (kind === "pin4") return /^\d{4}$/.test(password) ? null : "PIN must be exactly 4 digits";
-  if (kind === "pin6") return /^\d{6}$/.test(password) ? null : "PIN must be exactly 6 digits";
+  if (kind === "pin4") return /^\d{4}$/.test(normalizeDigits(password)) ? null : "PIN must be exactly 4 digits";
+  if (kind === "pin6") return /^\d{6}$/.test(normalizeDigits(password)) ? null : "PIN must be exactly 6 digits";
   if (typeof password !== "string" || password.length < 6 || password.length > 128) {
     return "Text password must be 6-128 characters";
   }
@@ -311,7 +331,9 @@ export type UnlockOutcome =
   | { status: "disabled" }
   | { status: "no-lock" };
 
-/** Verify a password against a target, recording the attempt. */
+/** Verify a password against a target, recording the attempt.
+ *  Accepts the MAIN password or — while it is still valid — the
+ *  temporary password. Wrong-password accounting covers both. */
 export async function verifyUnlockAttempt(target: string, password: string): Promise<UnlockOutcome> {
   const state = await loadState(true);
   const lock = lockFor(state, target);
@@ -319,7 +341,13 @@ export async function verifyUnlockAttempt(target: string, password: string): Pro
 
   if (lock.disabledAt && lock.disabledAt > 0) return { status: "disabled" };
 
-  if (verifyGuardPassword(password, lock.hash)) {
+  // PIN kinds normalize Persian/Arabic digits before comparison.
+  const attempt = lock.kind === "text" ? password : normalizeDigits(password);
+  const tempAlive = Boolean(lock.tempHash) && lock.tempExpiresAt > Date.now();
+  const okMain = verifyGuardPassword(attempt, lock.hash);
+  const okTemp = tempAlive && verifyGuardPassword(attempt, lock.tempHash);
+
+  if (okMain || okTemp) {
     // Success clears the wrong-password budget.
     if (lock.failedAttempts !== 0 || lock.disabledAt !== null) {
       lock.failedAttempts = 0;
@@ -355,6 +383,10 @@ export interface SetLockInput {
   maxAttempts?: number;
   unlockDays?: number;
   password?: string;
+  /** optional temporary password (same kind); validated when non-empty */
+  tempPassword?: string;
+  /** epoch ms until which the temporary password works */
+  tempExpiresAt?: number;
 }
 
 export type SetLockResult =
@@ -390,12 +422,30 @@ export async function setLock(input: SetLockInput): Promise<SetLockResult> {
     lock.unlockDays = Math.max(0, Math.min(90, d));
   }
   if (typeof input.password === "string" && input.password.length > 0) {
-    const policyError = validateGuardPassword(lock.kind, input.password);
+    const candidate = lock.kind === "text" ? input.password : normalizeDigits(input.password);
+    const policyError = validateGuardPassword(lock.kind, candidate);
     if (policyError) return { ok: false, error: policyError };
-    lock.hash = hashGuardPassword(input.password);
+    lock.hash = hashGuardPassword(candidate);
     // A fresh password re-arms the wrong-password budget.
     lock.failedAttempts = 0;
     lock.disabledAt = null;
+  }
+  if (input.tempPassword !== undefined) {
+    if (input.tempPassword === "") {
+      // Explicit empty string clears the temporary password.
+      lock.tempHash = "";
+      lock.tempExpiresAt = 0;
+    } else {
+      const tempCandidate = lock.kind === "text" ? input.tempPassword : normalizeDigits(input.tempPassword);
+      const policyError = validateGuardPassword(lock.kind, tempCandidate);
+      if (policyError) return { ok: false, error: `Temporary password: ${policyError}` };
+      const expires = Number(input.tempExpiresAt);
+      if (!Number.isFinite(expires) || expires <= Date.now()) {
+        return { ok: false, error: "Temporary password expiry must be in the future" };
+      }
+      lock.tempHash = hashGuardPassword(tempCandidate);
+      lock.tempExpiresAt = Math.min(expires, Date.now() + 366 * 86_400_000);
+    }
   }
   if (input.enabled !== undefined) {
     if (input.enabled && !lock.hash) {
@@ -412,6 +462,19 @@ export async function setLock(input: SetLockInput): Promise<SetLockResult> {
   }
   await persist(state);
   return { ok: true, info: toPublicInfo(target, lock) };
+}
+
+/** Clear only the temporary password of a lock. */
+export async function clearTempPassword(target: string): Promise<PublicLockInfo | null> {
+  if (!isValidTarget(target)) return null;
+  const state = await loadState(true);
+  const lock = lockFor(state, target);
+  if (!lock) return null;
+  lock.tempHash = "";
+  lock.tempExpiresAt = 0;
+  lock.updatedAt = Date.now();
+  await persist(state);
+  return toPublicInfo(target, lock);
 }
 
 export async function clearLock(target: string): Promise<boolean> {

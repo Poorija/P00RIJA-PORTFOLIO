@@ -2,13 +2,20 @@
 
 /* ==================================================================
  * CustomSectionView — renders a user-created (custom-*) section from
- * CMS data: badge, title, subtitle, body, key/value items, CTA.
+ * CMS data: badge, title, subtitle, body, key/value items, CTA, and
+ * an OPTIONAL fullscreen project gallery (same VirtualGallery the
+ * builtin sections use). Each section's gallery carries its own
+ * Access Guard lock (`gallery:custom-*`) if the owner sets one.
  * Accent color can come from the section's linked planet.
  * ================================================================== */
 
-import { motion } from "framer-motion";
-import { ArrowUpRight } from "lucide-react";
-import type { BuilderSectionConfig, CustomSectionData } from "@/lib/content-types";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowUpRight, Frame } from "lucide-react";
+import { VirtualGallery } from "./virtual-gallery";
+import { useGalleryGate } from "./section-guard";
+import { useContent } from "@/lib/content-store";
+import type { BuilderSectionConfig, CustomSectionData, PortfolioGalleryConfig } from "@/lib/content-types";
 
 const fade = (c: string, pct = 50) => `color-mix(in oklch, ${c} ${100 - pct}%, transparent)`;
 
@@ -27,6 +34,10 @@ function normalize(data: unknown): CustomSectionData {
     ctaLabel: typeof d.ctaLabel === "string" ? d.ctaLabel : "",
     ctaUrl: typeof d.ctaUrl === "string" ? d.ctaUrl : "",
     badge: typeof d.badge === "string" ? d.badge : "",
+    gallery:
+      d.gallery && typeof d.gallery === "object" && Array.isArray((d.gallery as PortfolioGalleryConfig).projects)
+        ? d.gallery
+        : null,
   };
 }
 
@@ -43,6 +54,15 @@ export function CustomSectionView({
 }) {
   const view = normalize(data);
   const color = accent || section.accent || "var(--ai-1)";
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const guardSections = useContent((s) => s.guardSections);
+  const galleryGate = useGalleryGate(section.id, section.label || section.id);
+  // A lock armed for this gallery keeps the entry button alive even while
+  // the gallery payload itself is withheld server-side.
+  const galleryLockActive = Boolean(
+    guardSections[`gallery:${section.id}`]?.enabled && guardSections[`gallery:${section.id}`]?.hasPassword
+  );
+  const showGallery = Boolean(view.gallery && (view.gallery.projects?.length || view.gallery.title)) || galleryLockActive;
 
   return (
     <section
@@ -113,13 +133,26 @@ export function CustomSectionView({
             </div>
           )}
 
+          {showGallery && (
+            <button
+              onClick={() => galleryGate.gate(() => setGalleryOpen(true))}
+              data-cursor-hover
+              data-cms-node="gallery-button"
+              className="group mt-8 inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold transition-all hover:gap-3"
+              style={{ borderColor: fade(color, 40), color, background: fade(color, 94) }}
+            >
+              <Frame className="h-4 w-4 transition-transform group-hover:rotate-3" style={{ color }} />
+              {view.gallery?.enterLabel?.trim() || (lang === "fa" ? "ورود به گالری سه‌بعدی" : "Enter the virtual gallery")}
+            </button>
+          )}
+
           {view.ctaLabel && view.ctaUrl && (
             <a
               href={view.ctaUrl}
               target={view.ctaUrl.startsWith("http") ? "_blank" : undefined}
               rel="noopener noreferrer"
               data-cursor-hover
-              className="mt-8 inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-bold transition-all hover:gap-3"
+              className="ms-0 mt-8 inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-bold transition-all hover:gap-3"
               style={{ borderColor: fade(color, 45), color, background: fade(color, 94) }}
             >
               {view.ctaLabel}
@@ -128,6 +161,19 @@ export function CustomSectionView({
           )}
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {galleryOpen && view.gallery && (
+          <VirtualGallery
+            layout={view.gallery.layout}
+            projects={view.gallery.projects}
+            title={view.gallery.title}
+            subtitle={view.gallery.subtitle}
+            onClose={() => setGalleryOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+      {galleryGate.node}
     </section>
   );
 }

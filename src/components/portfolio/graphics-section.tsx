@@ -8,6 +8,7 @@ import { SectionHeading, TiltCard, Reveal, Chip } from "./section-utils";
 import { useContent } from "@/lib/content-store";
 import { makeFrameGate } from "@/lib/anim";
 import { VirtualGallery } from "./virtual-gallery";
+import { useGalleryGate } from "./section-guard";
 import { Ambient3DObject } from "./ambient-3d-object";
 import type { SceneObject3DConfig } from "@/lib/content-types";
 import type { GalleryLayout } from "@/lib/content-types";
@@ -19,6 +20,7 @@ export function GraphicsSection() {
   const mainObject = findSceneObject(objects, "graphics-main");
   const ambientObject = findSceneObject(objects, "graphics-ambient");
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const graphicsGallery = useGalleryGate("graphics", "Graphics");
 
   return (
     <section
@@ -59,7 +61,7 @@ export function GraphicsSection() {
         <Reveal delay={0.1}>
           <div data-cms-node="gallery-button" className="mb-8 flex flex-wrap items-center gap-3">
             <button
-              onClick={() => setGalleryOpen(true)}
+              onClick={() => graphicsGallery.gate(() => setGalleryOpen(true))}
               data-cursor-hover
               className="btn-outline-gfx group flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]"
             >
@@ -134,7 +136,7 @@ export function GraphicsSection() {
             {/* Section-colored CTA — opens the full gallery */}
             <Reveal delay={0.3} className="sm:col-span-2">
               <button
-                onClick={() => setGalleryOpen(true)}
+                onClick={() => graphicsGallery.gate(() => setGalleryOpen(true))}
                 data-cursor-hover
                 className="btn-solid-gfx group flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-sm font-semibold transition-transform hover:scale-[1.01]"
               >
@@ -163,6 +165,7 @@ export function GraphicsSection() {
 
       {/* Project gallery full-screen overlay */}
       <AnimatePresence>
+        {graphicsGallery.node}
         {galleryOpen && (
           <VirtualGallery
             layout={(g.gallery as { layout?: GalleryLayout }).layout}

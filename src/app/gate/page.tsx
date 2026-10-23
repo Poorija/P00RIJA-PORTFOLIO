@@ -20,6 +20,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { Lock, ShieldAlert, ShieldCheck } from "lucide-react";
+import { normalizeDigits } from "@/lib/persian-digits";
 
 interface GateInfo {
   kind: "pin4" | "pin6" | "text";
@@ -236,9 +237,11 @@ export default function GatePage() {
                     maxLength={pinLength}
                     value={pin}
                     onChange={(v) => {
-                      setPin(v);
+                      // Persian keyboards emit ۰-۹ — normalize to ASCII.
+                      const norm = normalizeDigits(v);
+                      setPin(norm);
                       setError(null);
-                      if (v.length === pinLength) void submit(v);
+                      if (norm.length === pinLength) void submit(norm);
                     }}
                     autoFocus
                     inputMode="numeric"

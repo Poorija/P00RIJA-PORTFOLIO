@@ -9,6 +9,7 @@ import { isAuthenticated } from "@/lib/auth";
 import {
   TARGET_SITE,
   clearLock,
+  clearTempPassword,
   getProtectionSnapshot,
   guardCookieName,
   readProtection,
@@ -24,18 +25,35 @@ import { getContent } from "@/lib/content-cache";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Renderable targets the CMS offers: configured locks + builder sections. */
+/** Renderable targets the CMS offers: configured locks + builder sections.
+ *  Sections that HAVE a gallery (builtin graphics/security/ai or custom
+ *  sections with gallery data) also get a `gallery:<id>` lock target. */
 async function knownTargets(): Promise<string[]> {
   const targets = new Set<string>([
     "hero", "graphics", "security", "ai", "timeline", "synthesis", "footer",
   ]);
   try {
     const content = await getContent();
-    for (const s of content.en.builder?.sections ?? []) {
-      if (typeof s?.id === "string" && s.id) targets.add(s.id);
+    const builderIds = new Set<string>();
+    for (const s of [...(content.en.builder?.sections ?? []), ...(content.fa.builder?.sections ?? [])]) {
+      if (typeof s?.id === "string" && s.id) builderIds.add(s.id);
     }
-    for (const s of content.fa.builder?.sections ?? []) {
-      if (typeof s?.id === "string" && s.id) targets.add(s.id);
+    for (const id of builderIds) targets.add(id);
+    // Gallery-capable builtins.
+    for (const id of ["graphics", "security", "ai"] as const) {
+      const hasGallery = Boolean(
+        (content.en[id] as { gallery?: unknown } | undefined)?.gallery ||
+        (content.fa[id] as { gallery?: unknown } | undefined)?.gallery
+      );
+      if (hasGallery) targets.add(`gallery:${id}`);
+    }
+    // Custom sections with a gallery configured.
+    for (const [id, data] of Object.entries(content.custom ?? {})) {
+      const hasGallery = Boolean(
+        (data?.en as { gallery?: unknown } | undefined)?.gallery ||
+        (data?.fa as { gallery?: unknown } | undefined)?.gallery
+      );
+      if (hasGallery) targets.add(`gallery:${id}`);
     }
   } catch {
     // content store hiccup — defaults above are enough
@@ -115,11 +133,20 @@ export async function POST(request: NextRequest) {
         maxAttempts: body.maxAttempts !== undefined ? Number(body.maxAttempts) : undefined,
         unlockDays: body.unlockDays !== undefined ? Number(body.unlockDays) : undefined,
         password: typeof body.password === "string" ? body.password : undefined,
+        tempPassword: typeof body.tempPassword === "string" ? body.tempPassword : undefined,
+        tempExpiresAt: body.tempExpiresAt !== undefined ? Number(body.tempExpiresAt) : undefined,
       });
       if (!result.ok) {
         return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
       }
       return NextResponse.json({ ok: true, lock: result.info });
+    }
+
+    if (action === "cleartemp") {
+      const target = typeof body.target === "string" ? body.target : "";
+      const info = await clearTempPassword(target);
+      if (!info) return NextResponse.json({ ok: false, error: "Invalid target" }, { status: 400 });
+      return NextResponse.json({ ok: true, lock: info });
     }
 
     if (action === "clear") {

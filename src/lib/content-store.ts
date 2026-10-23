@@ -24,6 +24,8 @@ export interface GuardLockInfo {
   failedAttempts: number;
   disabled: boolean;
   hasPassword: boolean;
+  hasTempPassword: boolean;
+  tempExpiresAt: number;
   unlockDays: number;
   updatedAt: number;
 }

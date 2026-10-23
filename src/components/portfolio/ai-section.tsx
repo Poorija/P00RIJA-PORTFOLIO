@@ -8,6 +8,7 @@ import type { GalleryLayout } from "@/lib/content-types";
 import { useContent } from "@/lib/content-store";
 import { Ambient3DObject } from "./ambient-3d-object";
 import { VirtualGallery } from "./virtual-gallery";
+import { useGalleryGate } from "./section-guard";
 import type { SiteContent } from "@/lib/content-types";
 
 const PROJECT_ICONS = [Bot, Eye, Workflow];
@@ -17,6 +18,7 @@ export function AISection() {
   const lang = useContent((s) => s.lang);
   const neuralObject = useContent((s) => s.content.design?.objects?.find((object) => object.slot === "ai-ambient"));
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const aiGallery = useGalleryGate("ai", "AI");
 
   return (
     <section
@@ -62,7 +64,7 @@ export function AISection() {
         </div>
 
         <Reveal delay={0.08}>
-          <button data-cms-node="gallery-button" onClick={() => setGalleryOpen(true)} className="mb-8 flex items-center gap-2 rounded-2xl border border-[var(--ai-1)]/35 bg-[var(--ai-1)]/5 px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[var(--ai-1)]/10">
+          <button data-cms-node="gallery-button" onClick={() => aiGallery.gate(() => setGalleryOpen(true))} className="mb-8 flex items-center gap-2 rounded-2xl border border-[var(--ai-1)]/35 bg-[var(--ai-1)]/5 px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[var(--ai-1)]/10">
             <Frame className="h-4 w-4 text-[var(--ai-1)]" />
             {a.gallery?.enterLabel}
           </button>
@@ -191,7 +193,8 @@ export function AISection() {
         </div>
       </div>
 
-      <AnimatePresence>{galleryOpen && a.gallery && <VirtualGallery layout={( a.gallery as { layout?: GalleryLayout }).layout} projects={a.gallery.projects} title={a.gallery.title} subtitle={a.gallery.subtitle} onClose={() => setGalleryOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{aiGallery.node}
+        {galleryOpen && a.gallery && <VirtualGallery layout={( a.gallery as { layout?: GalleryLayout }).layout} projects={a.gallery.projects} title={a.gallery.title} subtitle={a.gallery.subtitle} onClose={() => setGalleryOpen(false)} />}</AnimatePresence>
     </section>
   );
 }

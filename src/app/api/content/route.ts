@@ -87,6 +87,8 @@ export async function GET(request: NextRequest) {
     // the real CMS content stays private. The strip runs on a SHALLOW COPY:
     // getContent() hands out its shared cached object, and deleting keys on
     // it would poison the cache for every subsequent request this TTL.
+    // `gallery:<section>` locks strip only the gallery payload of that
+    // section (the section itself stays visible).
     const protection = await readProtection();
     const activeLocks = Object.entries(protection.sections)
       .filter(([, lock]) => lock.enabled && lock.hash)
@@ -103,11 +105,30 @@ export async function GET(request: NextRequest) {
         const fa = { ...(content.fa as unknown as Record<string, unknown>) };
         const en = { ...(content.en as unknown as Record<string, unknown>) };
         const custom = { ...(content.custom as Record<string, unknown>) };
-        for (const target of activeLocks) {
-          if (unlocked.has(target)) continue;
-          if (target in custom) delete custom[target];
+        const stripSection = (target: string) => {
+          if (custom && target in custom) delete custom[target];
           if (target in fa) delete fa[target];
           if (target in en) delete en[target];
+        };
+        const stripGallery = (ownerId: string) => {
+          if (custom && ownerId in custom) {
+            const entry = custom[ownerId] as { fa?: unknown; en?: unknown };
+            custom[ownerId] = {
+              fa: entry?.fa && typeof entry.fa === "object" ? { ...(entry.fa as Record<string, unknown>), gallery: undefined } : entry?.fa,
+              en: entry?.en && typeof entry.en === "object" ? { ...(entry.en as Record<string, unknown>), gallery: undefined } : entry?.en,
+            };
+          }
+          if (ownerId in fa && fa[ownerId] && typeof fa[ownerId] === "object") {
+            fa[ownerId] = { ...(fa[ownerId] as Record<string, unknown>), gallery: undefined };
+          }
+          if (ownerId in en && en[ownerId] && typeof en[ownerId] === "object") {
+            en[ownerId] = { ...(en[ownerId] as Record<string, unknown>), gallery: undefined };
+          }
+        };
+        for (const target of activeLocks) {
+          if (unlocked.has(target)) continue;
+          if (target.startsWith("gallery:")) stripGallery(target.slice("gallery:".length));
+          else stripSection(target);
         }
         content = {
           fa: fa as unknown as typeof content.fa,
