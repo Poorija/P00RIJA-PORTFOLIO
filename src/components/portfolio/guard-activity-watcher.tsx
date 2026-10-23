@@ -90,9 +90,12 @@ export function GuardActivityWatcher() {
         exitTimers.set(el, window.setTimeout(() => {
           exitTimers.delete(el);
           const store = useContent.getState();
-          if (store.guardUnlocked.includes(target)) {
-            void store.relockGuards([target]);
-          }
+          if (!store.guardUnlocked.includes(target)) return;
+          // A guard dialog being open means the visitor is actively unlocking
+          // — on mobile the on-screen keyboard shrinks the viewport and can
+          // push the section out of view; never re-lock under the dialog.
+          if (document.querySelector('[role="dialog"]')) return;
+          void store.relockGuards([target]);
         }, EXIT_GRACE_MS));
       }
     }, { threshold: 0 });

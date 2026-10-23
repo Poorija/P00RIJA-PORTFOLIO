@@ -113,7 +113,9 @@ export function GuardUnlockDialog({
 
   return (
     <motion.div
-      className="fixed inset-0 z-[140] flex items-center justify-center p-4"
+      // Mobile: top-aligned with breathing room so the on-screen keyboard
+      // never covers the PIN input (the dialog stays above the keyplane).
+      className="fixed inset-0 z-[140] flex items-start justify-center overflow-y-auto p-4 pt-[10vh] sm:items-center sm:pt-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -270,6 +272,18 @@ export function GuardUnlockDialog({
 
 /* ---------------- shell ---------------- */
 
+/* Section accent for the mobile locked teaser (keeps the skeleton in the
+ * section's own color world; falls back to the primary accent). */
+const SECTION_ACCENTS: Record<string, string> = {
+  hero: "var(--gfx-1)",
+  graphics: "var(--gfx-1)",
+  security: "var(--sec-1)",
+  ai: "var(--ai-1)",
+  timeline: "var(--gfx-3, var(--gfx-1))",
+  synthesis: "var(--ai-3, var(--ai-1))",
+  footer: "var(--sec-1)",
+};
+
 export function SectionGuardShell({
   target,
   label,
@@ -283,11 +297,19 @@ export function SectionGuardShell({
   const lock = useContent((s) => s.guardSections[target]);
   const unlocked = useContent((s) => s.guardUnlocked);
   const guardLoaded = useContent((s) => s.guardLoaded);
+  const viewportWidth = useContent((s) => s.viewportWidth);
   const [dialogOpen, setDialogOpen] = useState(false);
   const fa = lang === "fa";
 
   // Hooks must run regardless of lock state; compute the lock after.
   const locked = isLockedFor(lock, unlocked, guardLoaded);
+  // MOBILE: blurring the real section (full-bleed filter over live WebGL
+  // loops) exhausted iOS GPU memory and Safari killed the tab (blank page
+  // the moment a locked section entered the viewport). Locked sections on
+  // small screens therefore render a lightweight SKELETON teaser instead —
+  // the real children (and their 3D canvases) are not mounted at all until
+  // the visitor unlocks. Desktop keeps the original blur preview.
+  const isMobile = viewportWidth > 0 && viewportWidth < 768;
 
   const displayLabel = useMemo(
     () => label || lock?.target || target,
@@ -306,6 +328,89 @@ export function SectionGuardShell({
     ? Math.max(0, lock.maxAttempts - lock.failedAttempts)
     : null;
 
+  const accent = SECTION_ACCENTS[target] ?? "var(--primary)";
+
+  const lockOverlay = (
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/35 p-6">
+      <div className="flex max-w-md flex-col items-center gap-3 text-center">
+        <div className="grid size-12 place-items-center rounded-full border border-border bg-background/80 shadow-lg backdrop-blur">
+          <Lock className="size-5 text-[var(--sec-1)]" />
+        </div>
+        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+          {fa ? "بخش محافظت‌شده" : "protected section"}
+        </p>
+        <h3 className="text-base font-black text-foreground md:text-lg">{displayLabel}</h3>
+        {disabled ? (
+          <p className="text-xs leading-6 text-amber-300">
+            {fa
+              ? "این قفل پس از تلاش‌های ناموفق غیرفعال شده است."
+              : "This lock is disabled after too many wrong attempts."}
+          </p>
+        ) : (
+          <>
+            <p className="text-xs leading-6 text-muted-foreground">
+              {fa
+                ? "برای مشاهده این بخش، رمز عبور را وارد کنید."
+                : "Enter the password to reveal this section."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
+              className={cn(
+                "mt-1 inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-bold transition-all",
+                "border-[var(--sec-1)]/40 bg-background/80 text-foreground backdrop-blur",
+                "hover:border-[var(--sec-1)] hover:bg-[var(--sec-1)]/15"
+              )}
+            >
+              <Lock className="size-4 text-[var(--sec-1)]" />
+              {fa ? "ورود با رمز" : "Enter password"}
+            </button>
+            {remaining !== null && lock && lock.failedAttempts > 0 && (
+              <p className="font-mono text-[10px] text-muted-foreground/80">
+                {fa
+                  ? `${remaining} تلاش باقی مانده`
+                  : `${remaining} attempt${remaining === 1 ? "" : "s"} remaining`}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── mobile: skeleton teaser (NO real children mounted → no WebGL, no
+  //    blur filter, a couple of gradients is the entire cost) ────────────
+  if (isMobile) {
+    return (
+      <div className="relative min-h-[440px] overflow-hidden" data-guard-target={target}>
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background:
+              `radial-gradient(120% 90% at 20% 0%, color-mix(in oklch, ${accent} 16%, transparent), transparent 60%),` +
+              `radial-gradient(100% 80% at 90% 100%, color-mix(in oklch, ${accent} 10%, transparent), transparent 55%)`,
+          }}
+        />
+        {/* faint content placeholders so the teaser reads as "a section" */}
+        <div aria-hidden className="absolute inset-x-6 top-10 space-y-3 opacity-25 sm:inset-x-12">
+          <div className="h-3 w-24 rounded-full" style={{ background: accent }} />
+          <div className="h-7 w-3/4 rounded-lg bg-foreground/25" />
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="h-28 rounded-2xl border border-border bg-background/50" />
+            <div className="h-28 rounded-2xl border border-border bg-background/50" />
+          </div>
+        </div>
+        {lockOverlay}
+        <AnimatePresence>
+          {dialogOpen && lock && (
+            <GuardUnlockDialog lock={lock} label={displayLabel} onClose={() => setDialogOpen(false)} />
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
   return (
     <div className="relative" data-guard-target={target}>
       <div
@@ -316,53 +421,7 @@ export function SectionGuardShell({
       >
         {children}
       </div>
-
-      <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/35 p-6">
-        <div className="flex max-w-md flex-col items-center gap-3 text-center">
-          <div className="grid size-12 place-items-center rounded-full border border-border bg-background/80 shadow-lg backdrop-blur">
-            <Lock className="size-5 text-[var(--sec-1)]" />
-          </div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-            {fa ? "بخش محافظت‌شده" : "protected section"}
-          </p>
-          <h3 className="text-base font-black text-foreground md:text-lg">{displayLabel}</h3>
-          {disabled ? (
-            <p className="text-xs leading-6 text-amber-300">
-              {fa
-                ? "این قفل پس از تلاش‌های ناموفق غیرفعال شده است."
-                : "This lock is disabled after too many wrong attempts."}
-            </p>
-          ) : (
-            <>
-              <p className="text-xs leading-6 text-muted-foreground">
-                {fa
-                  ? "برای مشاهده این بخش، رمز عبور را وارد کنید."
-                  : "Enter the password to reveal this section."}
-              </p>
-              <button
-                type="button"
-                onClick={() => setDialogOpen(true)}
-                className={cn(
-                  "mt-1 inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-bold transition-all",
-                  "border-[var(--sec-1)]/40 bg-background/80 text-foreground backdrop-blur",
-                  "hover:border-[var(--sec-1)] hover:bg-[var(--sec-1)]/15"
-                )}
-              >
-                <Lock className="size-4 text-[var(--sec-1)]" />
-                {fa ? "ورود با رمز" : "Enter password"}
-              </button>
-              {remaining !== null && lock && lock.failedAttempts > 0 && (
-                <p className="font-mono text-[10px] text-muted-foreground/80">
-                  {fa
-                    ? `${remaining} تلاش باقی مانده`
-                    : `${remaining} attempt${remaining === 1 ? "" : "s"} remaining`}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
+      {lockOverlay}
       <AnimatePresence>
         {dialogOpen && lock && (
           <GuardUnlockDialog lock={lock} label={displayLabel} onClose={() => setDialogOpen(false)} />
