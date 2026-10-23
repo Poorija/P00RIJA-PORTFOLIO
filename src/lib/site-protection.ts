@@ -56,6 +56,13 @@ export interface LockConfig {
   tempExpiresAt: number;
   /** how many days an unlock cookie lasts (0 = browser session) */
   unlockDays: number;
+  /** CLIENT re-lock policy: after this many idle minutes the visitor's
+   *  unlock is withdrawn again (0 = never re-lock on idle). The cookie is
+   *  actively deleted via /api/protection/relock so the re-lock is real. */
+  idleMinutes: number;
+  /** CLIENT re-lock policy: withdraw the unlock as soon as the visitor
+   *  scrolls the section out of view (or closes a gallery popup). */
+  relockOnExit: boolean;
   updatedAt: number;
 }
 
@@ -78,6 +85,8 @@ export interface PublicLockInfo {
   hasTempPassword: boolean;
   tempExpiresAt: number;
   unlockDays: number;
+  idleMinutes: number;
+  relockOnExit: boolean;
   updatedAt: number;
 }
 
@@ -93,6 +102,8 @@ export function emptyLock(): LockConfig {
     tempHash: "",
     tempExpiresAt: 0,
     unlockDays: 7,
+    idleMinutes: 0,
+    relockOnExit: false,
     updatedAt: 0,
   };
 }
@@ -193,6 +204,8 @@ function toPublicInfo(target: string, lock: LockConfig): PublicLockInfo {
     hasTempPassword: tempAlive,
     tempExpiresAt: lock.tempExpiresAt,
     unlockDays: lock.unlockDays,
+    idleMinutes: lock.idleMinutes ?? 0,
+    relockOnExit: Boolean(lock.relockOnExit),
     updatedAt: lock.updatedAt,
   };
 }
@@ -387,6 +400,10 @@ export interface SetLockInput {
   tempPassword?: string;
   /** epoch ms until which the temporary password works */
   tempExpiresAt?: number;
+  /** client re-lock: idle minutes before the unlock is withdrawn (0-240) */
+  idleMinutes?: number;
+  /** client re-lock: withdraw as soon as the visitor leaves the section */
+  relockOnExit?: boolean;
 }
 
 export type SetLockResult =
@@ -420,6 +437,14 @@ export async function setLock(input: SetLockInput): Promise<SetLockResult> {
     const d = Math.round(Number(input.unlockDays));
     if (!Number.isFinite(d)) return { ok: false, error: "Invalid unlockDays" };
     lock.unlockDays = Math.max(0, Math.min(90, d));
+  }
+  if (input.idleMinutes !== undefined) {
+    const m = Math.round(Number(input.idleMinutes));
+    if (!Number.isFinite(m)) return { ok: false, error: "Invalid idleMinutes" };
+    lock.idleMinutes = Math.max(0, Math.min(240, m));
+  }
+  if (input.relockOnExit !== undefined) {
+    lock.relockOnExit = Boolean(input.relockOnExit);
   }
   if (typeof input.password === "string" && input.password.length > 0) {
     const candidate = lock.kind === "text" ? input.password : normalizeDigits(input.password);

@@ -172,7 +172,7 @@ export function GraphicsSection() {
             projects={g.gallery.projects}
             title={g.gallery.title}
             subtitle={g.gallery.subtitle}
-            onClose={() => setGalleryOpen(false)}
+            onClose={() => { setGalleryOpen(false); graphicsGallery.onPopupClose(); }}
           />
         )}
       </AnimatePresence>

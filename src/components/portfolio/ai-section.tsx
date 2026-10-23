@@ -194,7 +194,7 @@ export function AISection() {
       </div>
 
       <AnimatePresence>{aiGallery.node}
-        {galleryOpen && a.gallery && <VirtualGallery layout={( a.gallery as { layout?: GalleryLayout }).layout} projects={a.gallery.projects} title={a.gallery.title} subtitle={a.gallery.subtitle} onClose={() => setGalleryOpen(false)} />}</AnimatePresence>
+        {galleryOpen && a.gallery && <VirtualGallery layout={( a.gallery as { layout?: GalleryLayout }).layout} projects={a.gallery.projects} title={a.gallery.title} subtitle={a.gallery.subtitle} onClose={() => { setGalleryOpen(false); aiGallery.onPopupClose(); }} />}</AnimatePresence>
     </section>
   );
 }

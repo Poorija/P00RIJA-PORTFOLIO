@@ -27,6 +27,8 @@ export interface GuardLockInfo {
   hasTempPassword: boolean;
   tempExpiresAt: number;
   unlockDays: number;
+  idleMinutes: number;
+  relockOnExit: boolean;
   updatedAt: number;
 }
 
@@ -45,12 +47,17 @@ interface ContentState {
   guardSite: GuardLockInfo | null;
   guardSections: Record<string, GuardLockInfo>;
   guardUnlocked: string[];
+  /** per-target epoch ms of the last unlock (idle re-lock baseline) */
+  guardUnlockedAt: Record<string, number>;
   guardLoaded: boolean;
   // actions
   fetchContent: (force?: boolean) => Promise<void>;
   /** Clear the browser cache and re-fetch — used after instant CMS writes. */
   refreshContent: () => Promise<void>;
   fetchGuard: () => Promise<void>;
+  /** Fetch guard + content and apply both in ONE store update (single render). */
+  applyGuardAndContentRefresh: () => Promise<boolean>;
+  relockGuards: (targets: string[]) => Promise<void>;
   unlockGuard: (target: string, password: string) => Promise<{
     status: "ok" | "wrong" | "disabled" | "rate" | "error";
     remaining?: number;
@@ -282,6 +289,7 @@ export const useContent = create<ContentState>((set, get) => ({
   guardSite: null,
   guardSections: {},
   guardUnlocked: [],
+  guardUnlockedAt: {},
   guardLoaded: false,
 
   fetchContent: async (force = false) => {
@@ -373,10 +381,17 @@ export const useContent = create<ContentState>((set, get) => ({
       const res = await fetch("/api/protection", { cache: "no-store" });
       const json = await res.json();
       if (json?.ok) {
+        const unlocked: string[] = Array.isArray(json.unlocked) ? json.unlocked : [];
+        // Keep per-target unlock timestamps (for the idle re-lock watcher);
+        // targets first seen as unlocked now get "page load" as their baseline.
+        const prevAt = get().guardUnlockedAt;
+        const unlockedAt: Record<string, number> = {};
+        for (const t of unlocked) unlockedAt[t] = prevAt[t] ?? Date.now();
         set({
           guardSite: json.site ?? null,
           guardSections: json.sections ?? {},
-          guardUnlocked: Array.isArray(json.unlocked) ? json.unlocked : [],
+          guardUnlocked: unlocked,
+          guardUnlockedAt: unlockedAt,
           guardLoaded: true,
         });
       } else {
@@ -387,6 +402,44 @@ export const useContent = create<ContentState>((set, get) => ({
     }
   },
 
+  /* One network round-trip each, then ONE store update. Applies the fresh
+   * guard state and the fresh (re-fetched) content together so the whole
+   * page re-renders a single time — the previous flow (stale-cache paint in
+   * fetchContent, then the fresh payload) caused a visible double-render
+   * stutter on every unlock. Returns true when the state was applied. */
+  applyGuardAndContentRefresh: async () => {
+    const [gRes, cRes] = await Promise.all([
+      fetch("/api/protection", { cache: "no-store" }),
+      fetch("/api/content", { cache: "no-store" }),
+    ]);
+    const g = await gRes.json().catch(() => null);
+    const c = await cRes.json().catch(() => null);
+    if (!c?.ok || !c.content) throw new Error("content refresh failed");
+    const fa = normalizeContent(mergeSiteContent(defaultContentFa, c.content.fa), "fa");
+    const en = normalizeContent(mergeSiteContent(defaultContentEn, c.content.en), "en");
+    const customs = (c.content.custom ?? {}) as Record<string, { fa: unknown; en: unknown }>;
+    const lang = get().lang;
+    const raw = lang === "fa" ? fa : en;
+    clearContentCache();
+    writeContentCache({ fa, en, custom: customs });
+    const unlocked: string[] = g?.ok && Array.isArray(g.unlocked) ? g.unlocked : get().guardUnlocked;
+    const prevAt = get().guardUnlockedAt;
+    const unlockedAt: Record<string, number> = {};
+    for (const t of unlocked) unlockedAt[t] = prevAt[t] ?? Date.now();
+    set({
+      contentFa: fa,
+      contentEn: en,
+      content: resolveResponsiveContent(raw, get().viewportWidth),
+      customs,
+      guardSite: g?.ok ? (g.site ?? null) : get().guardSite,
+      guardSections: g?.ok ? (g.sections ?? {}) : get().guardSections,
+      guardUnlocked: unlocked,
+      guardUnlockedAt: unlockedAt,
+      guardLoaded: true,
+    });
+    return true;
+  },
+
   unlockGuard: async (target, password) => {
     try {
       const res = await fetch("/api/protection/unlock", {
@@ -395,9 +448,15 @@ export const useContent = create<ContentState>((set, get) => ({
         body: JSON.stringify({ target, password }),
       });
       if (res.ok) {
-        // New unlock cookie → re-fetch both the guard state and the content
-        // (locked sections are withheld server-side until now).
-        await Promise.all([get().fetchGuard(), get().fetchContent(true)]);
+        // Single-swap refresh: guard state + un-stripped content land in ONE
+        // store update (no intermediate stale-cache render → no jank).
+        const unlockedAt = { ...get().guardUnlockedAt, [target]: Date.now() };
+        set({ guardUnlockedAt: unlockedAt });
+        try {
+          await get().applyGuardAndContentRefresh();
+        } catch {
+          await Promise.all([get().fetchGuard(), get().fetchContent(true)]);
+        }
         return { status: "ok" as const };
       }
       if (res.status === 423) return { status: "disabled" as const };
@@ -410,6 +469,27 @@ export const useContent = create<ContentState>((set, get) => ({
       return { status: "error" as const };
     } catch {
       return { status: "error" as const };
+    }
+  },
+
+  /* Withdraw the unlock for one or more targets (idle/exit re-lock): the
+   * server deletes the signed cookie, then guard+content refresh in a
+   * single swap so the section blurs and its data is stripped client-side
+   * again without a double render. */
+  relockGuards: async (targets) => {
+    try {
+      await fetch("/api/protection/relock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targets }),
+      });
+      try {
+        await get().applyGuardAndContentRefresh();
+      } catch {
+        await Promise.all([get().fetchGuard(), get().fetchContent(true)]);
+      }
+    } catch {
+      // network hiccup — local state still refreshes guard on next boot
     }
   },
 

@@ -135,6 +135,8 @@ export async function POST(request: NextRequest) {
         password: typeof body.password === "string" ? body.password : undefined,
         tempPassword: typeof body.tempPassword === "string" ? body.tempPassword : undefined,
         tempExpiresAt: body.tempExpiresAt !== undefined ? Number(body.tempExpiresAt) : undefined,
+        idleMinutes: body.idleMinutes !== undefined ? Number(body.idleMinutes) : undefined,
+        relockOnExit: typeof body.relockOnExit === "boolean" ? body.relockOnExit : undefined,
       });
       if (!result.ok) {
         return NextResponse.json({ ok: false, error: result.error }, { status: 400 });

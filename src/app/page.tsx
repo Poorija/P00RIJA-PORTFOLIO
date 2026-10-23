@@ -30,6 +30,7 @@ const PixelBuddy = dynamic(() => import("@/components/portfolio/pixel-buddy").th
 const GsapScrollEffects = dynamic(() => import("@/components/portfolio/gsap-scroll-effects").then((m) => ({ default: m.GsapScrollEffects })), { ssr: false });
 import { SmoothScroll } from "@/components/portfolio/smooth-scroll";
 import { SectionGuardShell } from "@/components/portfolio/section-guard";
+import { GuardActivityWatcher } from "@/components/portfolio/guard-activity-watcher";
 import { useContent } from "@/lib/content-store";
 
 export default function Home() {
@@ -45,6 +46,7 @@ export default function Home() {
         <SpaceComets />
         <CmsRuntimeController />
         <SectionDetector />
+        <GuardActivityWatcher />
         <CustomCursor />
         <ScrollProgress />
         <SiteHeader />

@@ -89,6 +89,8 @@ function LockEditor({
   const [maxAttempts, setMaxAttempts] = useState(lock?.maxAttempts ?? 5);
   const [unlockDays, setUnlockDays] = useState(lock?.unlockDays ?? 7);
   const [enabled, setEnabled] = useState(lock?.enabled ?? false);
+  const [idleMinutes, setIdleMinutes] = useState(lock?.idleMinutes ?? 0);
+  const [relockOnExit, setRelockOnExit] = useState(lock?.relockOnExit ?? false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -104,6 +106,8 @@ function LockEditor({
     setMaxAttempts(lock?.maxAttempts ?? 5);
     setUnlockDays(lock?.unlockDays ?? 7);
     setEnabled(lock?.enabled ?? false);
+    setIdleMinutes(lock?.idleMinutes ?? 0);
+    setRelockOnExit(lock?.relockOnExit ?? false);
     setPassword("");
     setConfirm("");
     setConfirmRemove(false);
@@ -189,6 +193,8 @@ function LockEditor({
         mode,
         maxAttempts,
         unlockDays,
+        idleMinutes,
+        relockOnExit,
         ...(password ? { password } : {}),
         ...(tempPassword ? { tempPassword, tempExpiresAt: tempExpiresAtMs() } : {}),
       },
@@ -322,6 +328,25 @@ function LockEditor({
             disabled={busy} className={inputClass}
           />
         </label>
+
+        <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <span>{fa ? "قفل مجدد بعد از بیکاری (دقیقه، ۰ = خاموش)" : "Re-lock after idle (minutes, 0 = off)"}</span>
+          <Input
+            type="number" min={0} max={240} value={idleMinutes}
+            onChange={(e) => setIdleMinutes(Math.max(0, Math.min(240, Number(e.target.value) || 0)))}
+            disabled={busy} className={inputClass}
+          />
+          <span className="text-[10px] text-muted-foreground/70">
+            {fa ? "اگر بازدیدکننده پس از وارد کردن رمز به همین اندازه بیکار بماند، بخش دوباره قفل می‌شود." : "If the visitor stays idle this long after unlocking, the section locks again."}
+          </span>
+        </label>
+
+        {!isSite && (
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+            <span>{fa ? "قفل مجدد هنگام خروج از بخش (یا بستن گالری)" : "Re-lock when the visitor leaves the section (or closes the gallery)"}</span>
+            <Switch checked={relockOnExit} onCheckedChange={setRelockOnExit} disabled={busy} />
+          </label>
+        )}
 
         <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
           <span>

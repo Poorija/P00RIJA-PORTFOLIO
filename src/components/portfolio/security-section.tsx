@@ -181,7 +181,7 @@ export function SecuritySection() {
       </div>
 
       <AnimatePresence>{securityGallery.node}
-        {galleryOpen && s.gallery && <VirtualGallery layout={( s.gallery as { layout?: GalleryLayout }).layout} projects={s.gallery.projects} title={s.gallery.title} subtitle={s.gallery.subtitle} onClose={() => setGalleryOpen(false)} />}</AnimatePresence>
+        {galleryOpen && s.gallery && <VirtualGallery layout={( s.gallery as { layout?: GalleryLayout }).layout} projects={s.gallery.projects} title={s.gallery.title} subtitle={s.gallery.subtitle} onClose={() => { setGalleryOpen(false); securityGallery.onPopupClose(); }} />}</AnimatePresence>
     </section>
   );
 }

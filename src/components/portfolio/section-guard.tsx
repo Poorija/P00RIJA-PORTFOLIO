@@ -294,7 +294,12 @@ export function SectionGuardShell({
     [label, lock?.target, target]
   );
 
-  if (!locked) return <>{children}</>;
+  // Always render the wrapper (even unlocked) so the exit-relock
+  // IntersectionObserver in GuardActivityWatcher has a stable element with
+  // data-guard-target to watch for every section/footer.
+  if (!locked) {
+    return <div data-guard-target={target}>{children}</div>;
+  }
 
   const disabled = Boolean(lock?.disabled);
   const remaining = lock?.mode === "attempts"
@@ -302,7 +307,7 @@ export function SectionGuardShell({
     : null;
 
   return (
-    <div className="relative">
+    <div className="relative" data-guard-target={target}>
       <div
         inert
         aria-hidden
@@ -399,6 +404,16 @@ export function useGalleryGate(sectionId: string, label: string) {
   const fa = lang === "fa";
   const displayLabel = `${fa ? "گالری" : "Gallery"} — ${label}`;
 
+  /** Exit re-lock: call from the gallery popup's onClose — when the
+   *  "relock on exit" policy is armed, closing the popup withdraws the
+   *  unlock (cookie deleted + data re-stripped client-side). */
+  const onPopupClose = () => {
+    const store = useContent.getState();
+    if (lock?.relockOnExit && store.guardUnlocked.includes(lock.target)) {
+      void store.relockGuards([lock.target]);
+    }
+  };
+
   const node = (
     <AnimatePresence>
       {dialogOpen && lock && (
@@ -416,5 +431,5 @@ export function useGalleryGate(sectionId: string, label: string) {
     </AnimatePresence>
   );
 
-  return { gate, node, lock, locked };
+  return { gate, node, lock, locked, onPopupClose };
 }
