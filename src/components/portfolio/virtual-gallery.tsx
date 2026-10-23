@@ -12,8 +12,11 @@ import {
   User,
   Briefcase,
   Tag,
+  Lock,
 } from "lucide-react";
 import { useContent } from "@/lib/content-store";
+import { projectTarget } from "@/lib/guard-targets";
+import { GuardUnlockDialog } from "./section-guard";
 import { useSuspendLenis } from "./smooth-scroll";
 import type { GalleryLayout, ProjectArtwork } from "@/lib/content-types";
 
@@ -23,6 +26,9 @@ interface Props {
   subtitle: string;
   layout?: GalleryLayout;
   onClose: () => void;
+  /** Owning section id — required for per-project Access Guard locks
+   *  (target proj:<sectionId>:<slug>). */
+  sectionId?: string;
 }
 
 const FA_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
@@ -43,11 +49,28 @@ function localizedRole(role: string, lang: "fa" | "en") {
   return lang === "fa" ? FA_ROLES[role] ?? role : role;
 }
 
-export function VirtualGallery({ projects, title, subtitle, layout = "cinematic", onClose }: Props) {
+export function VirtualGallery({ projects, title, subtitle, layout = "cinematic", onClose, sectionId }: Props) {
   const t = useContent((s) => s.t);
   const lang = useContent((s) => s.lang);
+  const guardSections = useContent((s) => s.guardSections);
   const [active, setActive] = useState<number | null>(null);
   const [current, setCurrent] = useState(0);
+  const [lockDialogIdx, setLockDialogIdx] = useState<number | null>(null);
+
+  /* Per-project Access Guard: the SERVER already replaced locked projects
+   * with identity-only stubs (locked:true, empty payload). Clicking such a
+   * card opens the PIN dialog instead of the project detail; a successful
+   * unlock re-fetches content and the real project replaces the stub. */
+  const openProject = (i: number) => {
+    if (projects[i]?.locked) {
+      setLockDialogIdx(i);
+      return;
+    }
+    setActive(i);
+  };
+  const lockDialogProject = lockDialogIdx !== null ? projects[lockDialogIdx] : null;
+  const lockDialogTarget = lockDialogProject && sectionId ? projectTarget(sectionId, lockDialogProject.title ?? "") : "";
+  const lockDialogInfo = lockDialogTarget ? guardSections[lockDialogTarget] : undefined;
   const portalTarget = typeof document === "undefined" ? null : document.body;
 
   // Rendering overlays through body keeps fixed positioning independent from
@@ -139,7 +162,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
           style={{ perspective: "1400px", perspectiveOrigin: "50% 50%" }}
         >
           {layout !== "cinematic" && (
-            <AltGalleryBody layout={layout} projects={projects} lang={lang} onOpen={(i) => setActive(i)} />
+            <AltGalleryBody layout={layout} projects={projects} lang={lang} onOpen={(i) => openProject(i)} />
           )}
           {/* horizontal track */}
           <div
@@ -151,17 +174,27 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
           >
             {projects.map((p, i) => (
               <div
-                key={p.title + i}
+                key={`${i}-${p.locked ? "locked" : "open"}`}
                 className="relative h-full w-full shrink-0"
                 style={{ transformStyle: "preserve-3d" }}
               >
-                <ProjectSlide
-                  project={p}
-                  index={i}
-                  current={current}
-                  lang={lang}
-                  onClick={() => setActive(i)}
-                />
+                {p.locked ? (
+                  <LockedProjectSlide
+                    project={p}
+                    index={i}
+                    current={current}
+                    lang={lang}
+                    onClick={() => openProject(i)}
+                  />
+                ) : (
+                  <ProjectSlide
+                    project={p}
+                    index={i}
+                    current={current}
+                    lang={lang}
+                    onClick={() => openProject(i)}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -222,8 +255,85 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
           />
         )}
       </AnimatePresence>
+
+      {/* Per-project Access Guard unlock (locked stub card was clicked) */}
+      <AnimatePresence>
+        {lockDialogIdx !== null && lockDialogInfo && lockDialogProject && (
+          <GuardUnlockDialog
+            lock={lockDialogInfo}
+            label={lockDialogProject.title}
+            onClose={() => setLockDialogIdx(null)}
+            onUnlocked={() => setLockDialogIdx(null)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>,
     portalTarget,
+  );
+}
+
+/* ============================================================
+ * LockedProjectSlide — the cinematic-slide variant for a
+ * password-protected project (server stub: title/category only).
+ * Same 3D depth choreography as ProjectSlide.
+ * ============================================================ */
+function LockedProjectSlide({
+  project,
+  index,
+  current,
+  lang,
+  onClick,
+}: {
+  project: ProjectArtwork;
+  index: number;
+  current: number;
+  lang: "fa" | "en";
+  onClick: () => void;
+}) {
+  const distance = Math.abs(index - current);
+  const isActive = distance === 0;
+
+  return (
+    <div
+      className="grid h-full min-h-0 w-full place-items-center px-8 py-10"
+      style={{
+        transform: `translateZ(${isActive ? 0 : -200}px) rotateY(${(index - current) * (lang === "fa" ? -25 : 25)}deg)`,
+        opacity: distance > 2 ? 0 : 1 - distance * 0.15,
+        transformStyle: "preserve-3d",
+        transition: "transform 0.7s cubic-bezier(0.22,1,0.36,1), opacity 0.7s ease",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        data-cursor-hover
+        className="flex w-full max-w-md flex-col items-center gap-3 rounded-3xl border border-white/15 bg-background/40 px-8 py-12 text-center backdrop-blur-md transition-transform hover:scale-[1.02]"
+      >
+        <div className="grid size-14 place-items-center rounded-full border border-[var(--sec-1)]/40 bg-[var(--sec-1)]/10">
+          <Lock className="size-6 text-[var(--sec-1)]" />
+        </div>
+        {project.category && (
+          <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+            {project.category}
+          </span>
+        )}
+        <h3 className="text-balance text-2xl font-black leading-tight text-foreground sm:text-3xl">
+          {project.title}
+        </h3>
+        <p className="text-xs leading-6 text-muted-foreground">
+          {lang === "fa"
+            ? "این پروژه با رمز محافظت شده است."
+            : "This project is password-protected."}
+        </p>
+        <span
+          className="mt-2 inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-bold text-foreground"
+          style={{ borderColor: "color-mix(in oklch, var(--sec-1) 45%, transparent)" }}
+        >
+          <Lock className="size-4 text-[var(--sec-1)]" />
+          {lang === "fa" ? "ورود با رمز" : "Enter password"}
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -652,7 +762,7 @@ function AltGalleryBody({
     >
       {projects.map((p, i) => (
         <button
-          key={p.title + i}
+          key={`${i}-${p.locked ? "locked" : "open"}`}
           onClick={() => onOpen(i)}
           data-cursor-hover
           className={
@@ -665,7 +775,14 @@ function AltGalleryBody({
           <div className="p-3.5">
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/45">{p.category}</p>
             <p className="mt-1 truncate text-sm font-bold text-white">{p.title}</p>
-            <p className="mt-0.5 truncate text-[11px] text-white/50">{p.meta}</p>
+            {p.locked ? (
+              <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-[var(--sec-1)]">
+                <Lock className="size-3" />
+                {lang === "fa" ? "محافظت‌شده با رمز" : "Password-protected"}
+              </p>
+            ) : (
+              <p className="mt-0.5 truncate text-[11px] text-white/50">{p.meta}</p>
+            )}
           </div>
         </button>
       ))}
@@ -715,7 +832,7 @@ function SpotlightBody({
       <div className="flex shrink-0 gap-2 overflow-x-auto pb-1">
         {projects.map((pr, i) => (
           <button
-            key={pr.title + i}
+            key={`${i}-${pr.locked ? "locked" : "open"}`}
             onClick={() => setIdx(i)}
             aria-label={`item ${i + 1}`}
             className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border transition-all"

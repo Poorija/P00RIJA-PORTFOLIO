@@ -21,7 +21,7 @@ import { isAuthenticated } from "@/lib/auth";
 import { getContent, invalidateContent } from "@/lib/content-cache";
 import { isDeveloperOwnerUnlocked, lockDeveloperOwner } from "@/lib/developer-owner";
 import { pinDeveloperData } from "@/lib/vendor-identity";
-import { readProtection, unlockedTargetsFromCookies } from "@/lib/site-protection";
+import { readProtection, unlockedTargetsFromCookies, stripProjectsFromSection } from "@/lib/site-protection";
 
 function isSectionKey(value: unknown): value is SectionKey {
   return typeof value === "string" && (SECTION_KEYS as string[]).includes(value);
@@ -128,7 +128,26 @@ export async function GET(request: NextRequest) {
         for (const target of activeLocks) {
           if (unlocked.has(target)) continue;
           if (target.startsWith("gallery:")) stripGallery(target.slice("gallery:".length));
-          else stripSection(target);
+          else if (!target.startsWith("proj:")) stripSection(target);
+        }
+        // Per-PROJECT locks: stub the locked gallery projects (identity
+        // kept, payload emptied, locked:true) in every gallery-bearing
+        // section — builtins and custom-*.
+        const armedProjects = new Set(activeLocks.filter((t) => t.startsWith("proj:") && !unlocked.has(t)));
+        if (armedProjects.size > 0) {
+          const stripProj = (ownerId: string, faObj: unknown, enObj: unknown): { fa: unknown; en: unknown } | null => {
+            const r = stripProjectsFromSection(ownerId, faObj, enObj, armedProjects);
+            return r.changed ? { fa: r.fa, en: r.en } : null;
+          };
+          for (const id of ["graphics", "security", "ai"] as const) {
+            const r = stripProj(id, fa[id], en[id]);
+            if (r) { fa[id] = r.fa; en[id] = r.en; }
+          }
+          for (const [cid, entry] of Object.entries(custom)) {
+            const e = entry as { fa?: unknown; en?: unknown };
+            const r = stripProj(cid, e.fa, e.en);
+            if (r) custom[cid] = r;
+          }
         }
         content = {
           fa: fa as unknown as typeof content.fa,

@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { normalizeDigits } from "@/lib/persian-digits";
+import { projectTarget, PROJECT_TARGET_PREFIX } from "@/lib/guard-targets";
 import { useContent, type GuardLockInfo } from "@/lib/content-store";
 
 const TARGET_SITE = "__site__";
@@ -75,14 +76,17 @@ function LockEditor({
   lock,
   lang,
   onChanged,
+  labelOverride,
 }: {
   target: string;
   lock: LockRow | null;
   lang: "fa" | "en";
   onChanged: () => void;
+  labelOverride?: string;
 }) {
   const fa = lang === "fa";
   const isSite = target === TARGET_SITE;
+  const isProject = target.startsWith(PROJECT_TARGET_PREFIX);
 
   const [kind, setKind] = useState<Kind>(lock?.kind ?? "pin4");
   const [mode, setMode] = useState<Mode>(lock?.mode ?? "permanent");
@@ -234,7 +238,7 @@ function LockEditor({
             : <LockOpen className="size-4 text-muted-foreground" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-foreground">{targetLabel(target, lang)}</p>
+          <p className="truncate text-sm font-bold text-foreground">{labelOverride ?? targetLabel(target, lang)}</p>
           <p className="truncate font-mono text-[10px] text-muted-foreground">
             {isSite ? "gate: /gate" : `target: ${target}`}
             {hasPassword ? ` · ${fa ? "رمز ثبت‌شده" : "password set"}` : ""}
@@ -341,7 +345,7 @@ function LockEditor({
           </span>
         </label>
 
-        {!isSite && (
+        {!isSite && !isProject && (
           <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
             <span>{fa ? "قفل مجدد هنگام خروج از بخش (یا بستن گالری)" : "Re-lock when the visitor leaves the section (or closes the gallery)"}</span>
             <Switch checked={relockOnExit} onCheckedChange={setRelockOnExit} disabled={busy} />
@@ -465,6 +469,7 @@ export function CmsSiteGuard({ lang }: { lang: "fa" | "en" }) {
   const builderSections = useContent((s) => s.content.builder.sections);
   const customs = useContent((s) => s.customs);
   const contentEn = useContent((s) => s.contentEn);
+  const contentFaSel = useContent((s) => s.contentFa);
 
   const load = useCallback(async () => {
     try {
@@ -485,7 +490,7 @@ export function CmsSiteGuard({ lang }: { lang: "fa" | "en" }) {
   }, [load]);
 
   /** Sections + galleries derived LIVE from the store (auto add/remove). */
-  const { sectionTargets, galleryTargets } = useMemo(() => {
+  const { sectionTargets, galleryTargets, projectTargets } = useMemo(() => {
     const sections = new Set<string>([
       "hero", "graphics", "security", "ai", "timeline", "synthesis", "footer",
     ]);
@@ -514,11 +519,46 @@ export function CmsSiteGuard({ lang }: { lang: "fa" | "en" }) {
     }
     sections.delete(TARGET_SITE);
     sections.delete("developer");
+
+    /* Per-PROJECT lock rows: every project of every gallery (live — new/
+       removed projects appear automatically), deduped by target. */
+    const projects: { target: string; label: string }[] = [];
+    const seenProj = new Set<string>();
+    const addProjects = (ownerId: string, gallery: unknown) => {
+      const list = (gallery as { projects?: { title?: string }[] } | null)?.projects;
+      if (!Array.isArray(list)) return;
+      for (const proj of list) {
+        const title = typeof proj?.title === "string" && proj.title.trim() ? proj.title.trim() : null;
+        if (!title) continue;
+        const t = projectTarget(ownerId, title);
+        if (seenProj.has(t)) continue;
+        seenProj.add(t);
+        projects.push({ target: t, label: `${title} · ${targetLabel(ownerId, lang)}` });
+      }
+    };
+    for (const id of ["graphics", "security", "ai"] as const) {
+      addProjects(id, (contentEn as unknown as Record<string, { gallery?: unknown }>)?.[id]?.gallery);
+      addProjects(id, (contentFaSel as unknown as Record<string, { gallery?: unknown }>)?.[id]?.gallery);
+    }
+    for (const [cid, value] of Object.entries(customs ?? {})) {
+      addProjects(cid, (value as { en?: { gallery?: unknown } })?.en?.gallery);
+      addProjects(cid, (value as { fa?: { gallery?: unknown } })?.fa?.gallery);
+    }
+    // already-configured proj locks whose project is temporarily absent
+    for (const t of Object.keys(data?.sections ?? {})) {
+      if (t.startsWith(PROJECT_TARGET_PREFIX) && !seenProj.has(t)) {
+        seenProj.add(t);
+        projects.push({ target: t, label: t });
+      }
+    }
+    projects.sort((a, b) => a.label.localeCompare(b.label));
+
     return {
       sectionTargets: [...sections].sort(),
       galleryTargets: [...galleries].sort(),
+      projectTargets: projects,
     };
-  }, [data, builderSections, customs, contentEn]);
+  }, [data, builderSections, customs, contentEn, contentFaSel, lang]);
 
   const activeCount = useMemo(() => {
     const entries = Object.values(data?.sections ?? {}).filter((l) => l.enabled && l.hasPassword).length;
@@ -638,6 +678,36 @@ export function CmsSiteGuard({ lang }: { lang: "fa" | "en" }) {
               lock={data?.sections[target] ?? null}
               lang={lang}
               onChanged={load}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* individual gallery projects */}
+      <section className="space-y-3">
+        <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--gfx-3, var(--gfx-1))]" />
+          {fa ? "قفل پروژه‌های تکی گالری (هر پروژه، رمز مستقل)" : "Per-project locks (one per gallery project)"}
+        </h4>
+        <p className="text-[11px] leading-6 text-muted-foreground">
+          {fa
+            ? "هر پروژه داخل هر گالری (گرافیک، امنیت، هوش مصنوعی یا بخش‌های سفارشی) را جداگانه قفل کنید — بقیه پروژه‌ها آزاد می‌مانند. پروژه قفل‌شده فقط عنوانش را نشان می‌دهد و محتوایش تا وارد کردن رمز از سرور ارسال نمی‌شود. فهرست به‌صورت زنده به‌روز می‌شود."
+            : "Lock any single project inside any gallery (graphics, security, AI, or custom sections) — the rest stay open. A locked project shows only its title; its payload is withheld server-side until unlocked. The list updates live."}
+        </p>
+        {projectTargets.length === 0 && (
+          <p className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+            {fa ? "پروژه‌ای در گالری‌ها یافت نشد." : "No gallery projects found."}
+          </p>
+        )}
+        <div className="grid gap-3 xl:grid-cols-2">
+          {projectTargets.map((row) => (
+            <LockEditor
+              key={row.target}
+              target={row.target}
+              lock={data?.sections[row.target] ?? null}
+              lang={lang}
+              onChanged={load}
+              labelOverride={row.label}
             />
           ))}
         </div>

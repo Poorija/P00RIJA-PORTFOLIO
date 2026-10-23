@@ -18,7 +18,7 @@ import { isAuthenticated } from "@/lib/auth";
 import { getContentSection, invalidateContent } from "@/lib/content-cache";
 import { isDeveloperOwnerUnlocked, lockDeveloperOwner } from "@/lib/developer-owner";
 import { pinDeveloperData } from "@/lib/vendor-identity";
-import { readProtection, unlockedTargetsFromCookies } from "@/lib/site-protection";
+import { readProtection, unlockedTargetsFromCookies, stripProjectsFromSection } from "@/lib/site-protection";
 
 function isSectionKey(value: string): value is SectionKey {
   return (SECTION_KEYS as string[]).includes(value);
@@ -73,6 +73,19 @@ export async function GET(
       !(await isAuthenticated()) && !unlocked.has(`gallery:${section}`)
     ) {
       data = { fa: stripGalleryPayload(data.fa), en: stripGalleryPayload(data.en) };
+    }
+
+    // Per-PROJECT locks: stub locked projects inside this section's gallery.
+    if (!(await isAuthenticated())) {
+      const armedProjects = new Set(
+        Object.entries(protection.sections)
+          .filter(([t, l]) => t.startsWith("proj:") && l.enabled && l.hash && !unlocked.has(t))
+          .map(([t]) => t)
+      );
+      if (armedProjects.size > 0) {
+        const r = stripProjectsFromSection(section, data.fa, data.en, armedProjects);
+        if (r.changed) data = { fa: r.fa, en: r.en };
+      }
     }
 
     if (isLang(langParam)) {

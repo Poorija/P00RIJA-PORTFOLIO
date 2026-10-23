@@ -38,6 +38,10 @@ export interface ProjectArtwork {
   images: string[];
   link: string;
   links?: { label: string; url: string; kind: "live" | "source" | "github" | "docs" | "other" }[];
+  /** Set by the SERVER while this project is password-locked (Access Guard
+   *  target proj:<section>:<slug>): all payload fields arrive emptied and
+   *  the gallery renders a lock card until the visitor unlocks. */
+  locked?: boolean;
 }
 
 export type GalleryLayout = "cinematic" | "grid" | "masonry" | "spotlight";

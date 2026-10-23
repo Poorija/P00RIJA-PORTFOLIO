@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { normalizeDigits } from "@/lib/persian-digits";
+import { projectTarget } from "@/lib/guard-targets";
 
 /* ============================================================
  * Site & section password protection ("Access Guard").
@@ -175,7 +176,80 @@ export function isValidTarget(target: string): boolean {
   return target === TARGET_SITE
     || SITE_KEYS_LOCKABLE.has(target)
     || /^custom-[a-zA-Z0-9-]{1,96}$/.test(target)
-    || /^gallery:[a-zA-Z0-9-]{1,96}$/.test(target);
+    || /^gallery:[a-zA-Z0-9-]{1,96}$/.test(target)
+    || /^proj:[a-zA-Z0-9-]{1,96}:\S{1,96}$/.test(target);
+}
+
+/* ---------------- per-project gallery stripping ---------------- */
+
+/** Server-side stub for a password-locked gallery project: keeps only the
+ *  display identity (title + category); every payload field is emptied and
+ *  `locked: true` tells the client to render the lock card. */
+export function stubLockedProject(p: Record<string, unknown>): Record<string, unknown> {
+  return {
+    title: typeof p.title === "string" ? p.title : "",
+    category: typeof p.category === "string" ? p.category : "",
+    meta: "",
+    year: "",
+    client: "",
+    role: "",
+    description: "",
+    color: "",
+    specs: [],
+    images: [],
+    link: "",
+    locked: true,
+  };
+}
+
+/** Stub every armed proj:<sectionId>:<slug> lock inside one section's
+ *  bilingual {fa, en} data. Locked indices are matched per language and
+ *  SYNCED across both (locking the fa-titled project also stubs the en
+ *  card at the same index). Returns new objects when anything changed —
+ *  inputs are never mutated (cache safety). */
+export function stripProjectsFromSection(
+  sectionId: string,
+  faSection: unknown,
+  enSection: unknown,
+  armed: Set<string>
+): { fa: unknown; en: unknown; changed: boolean } {
+  type GalleryLike = { gallery?: { projects?: unknown[] } } | null;
+  const galleryOf = (s: unknown): GalleryLike => {
+    if (!s || typeof s !== "object" || Array.isArray(s)) return null;
+    const g = (s as { gallery?: unknown }).gallery;
+    if (!g || typeof g !== "object" || !Array.isArray((g as { projects?: unknown[] }).projects)) return null;
+    return s as GalleryLike;
+  };
+  const faSec = galleryOf(faSection);
+  const enSec = galleryOf(enSection);
+  if (!faSec && !enSec) return { fa: faSection, en: enSection, changed: false };
+
+  const idx = new Set<number>();
+  const collect = (sec: GalleryLike) => {
+    sec?.gallery?.projects?.forEach((p, i) => {
+      const title = String((p as { title?: unknown })?.title ?? "");
+      if (armed.has(projectTarget(sectionId, title))) idx.add(i);
+    });
+  };
+  collect(faSec);
+  collect(enSec);
+  if (idx.size === 0) return { fa: faSection, en: enSection, changed: false };
+
+  let faOut = faSection;
+  let enOut = enSection;
+  if (faSec?.gallery) {
+    faOut = {
+      ...(faSection as Record<string, unknown>),
+      gallery: { ...faSec.gallery, projects: faSec.gallery.projects!.map((p, i) => (idx.has(i) ? stubLockedProject((p ?? {}) as Record<string, unknown>) : p)) },
+    };
+  }
+  if (enSec?.gallery) {
+    enOut = {
+      ...(enSection as Record<string, unknown>),
+      gallery: { ...enSec.gallery, projects: enSec.gallery.projects!.map((p, i) => (idx.has(i) ? stubLockedProject((p ?? {}) as Record<string, unknown>) : p)) },
+    };
+  }
+  return { fa: faOut, en: enOut, changed: true };
 }
 
 function lockFor(state: ProtectionState, target: string): LockConfig | null {

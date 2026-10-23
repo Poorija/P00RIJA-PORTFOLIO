@@ -169,7 +169,7 @@ export function CustomSectionView({
             projects={view.gallery.projects}
             title={view.gallery.title}
             subtitle={view.gallery.subtitle}
-            onClose={() => { setGalleryOpen(false); galleryGate.onPopupClose(); }}
+            sectionId={section.id} onClose={() => { setGalleryOpen(false); galleryGate.onPopupClose(); }}
           />
         )}
       </AnimatePresence>
