@@ -43,6 +43,24 @@ export function ContentBoot({ children }: { children: React.ReactNode }) {
     fetchContent();
     checkAuth();
     fetchGuard();
+    // Strict visitor identity: bind this browser to a device-fingerprint
+    // id (VPN/incognito resistant) so Access Guard blocks follow the
+    // device. Fire-and-forget; failures never affect page load.
+    void (async () => {
+      try {
+        const { collectFingerprint } = await import("@/lib/fingerprint");
+        const fp = await collectFingerprint();
+        if (fp) {
+          await fetch("/api/protection/identify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fp }),
+          }).catch(() => null);
+        }
+      } catch {
+        /* fingerprinting is best-effort */
+      }
+    })();
   }, [fetchContent, checkAuth, fetchGuard]);
 
   useEffect(() => {

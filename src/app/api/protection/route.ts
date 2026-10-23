@@ -21,6 +21,7 @@ import {
   type LockMode,
 } from "@/lib/site-protection";
 import { getContent } from "@/lib/content-cache";
+import { auditFeed, blockVisitor, listVisitors, unblockVisitor } from "@/lib/visitor-identity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,6 +87,8 @@ export async function GET(request: NextRequest) {
           // configured-but-inactive locks too (for the CMS editor)
           rawSectionTargets: Object.keys(state.sections),
           targets: await knownTargets(),
+          visitors: await listVisitors(),
+          audit: await auditFeed(80),
         },
         { headers: { "Cache-Control": "no-store" } }
       );
@@ -163,6 +166,23 @@ export async function POST(request: NextRequest) {
       const info = await resetAttempts(target);
       if (!info) return NextResponse.json({ ok: false, error: "Invalid target" }, { status: 400 });
       return NextResponse.json({ ok: true, lock: info });
+    }
+
+    if (action === "visitor-block") {
+      const vid = typeof body.vid === "string" ? body.vid : "";
+      const reason = typeof body.reason === "string" ? body.reason.slice(0, 120) : "manual";
+      if (!/^[a-f0-9]{32}$/.test(vid)) return NextResponse.json({ ok: false, error: "Invalid vid" }, { status: 400 });
+      const ok = await blockVisitor(vid, reason);
+      if (!ok) return NextResponse.json({ ok: false, error: "Unknown visitor" }, { status: 404 });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "visitor-unblock") {
+      const vid = typeof body.vid === "string" ? body.vid : "";
+      if (!/^[a-f0-9]{32}$/.test(vid)) return NextResponse.json({ ok: false, error: "Invalid vid" }, { status: 400 });
+      const ok = await unblockVisitor(vid);
+      if (!ok) return NextResponse.json({ ok: false, error: "Unknown visitor" }, { status: 404 });
+      return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ ok: false, error: "Unknown action" }, { status: 400 });

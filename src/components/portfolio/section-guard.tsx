@@ -99,6 +99,13 @@ export function GuardUnlockDialog({
       setError(fa ? "تلاش‌های شما زیاد بود — یک دقیقه صبر کنید." : "Too many attempts — wait a minute.");
       return;
     }
+    if (result.status === "blocked") {
+      setJustDisabled(false);
+      setError(fa
+        ? "دسترسی شما توسط مدیر سایت قطع شده است."
+        : "Your access has been revoked by the site owner.");
+      return;
+    }
     const left = remainingAfterFail(result.remaining);
     setError(
       left === null

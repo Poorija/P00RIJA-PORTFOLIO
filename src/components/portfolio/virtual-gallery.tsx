@@ -12,11 +12,14 @@ import {
   User,
   Briefcase,
   Tag,
+  MapPin,
   Lock,
+  Play,
 } from "lucide-react";
 import { useContent } from "@/lib/content-store";
 import { projectTarget } from "@/lib/guard-targets";
 import { GuardUnlockDialog } from "./section-guard";
+import { GalleryHall } from "./gallery-hall";
 import { useSuspendLenis } from "./smooth-scroll";
 import type { GalleryLayout, ProjectArtwork } from "@/lib/content-types";
 
@@ -161,7 +164,10 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
           className="relative mx-auto h-full w-full max-w-[1500px] overflow-hidden rounded-2xl border border-white/10 bg-black/10 shadow-2xl shadow-black/35 md:rounded-[28px]"
           style={{ perspective: "1400px", perspectiveOrigin: "50% 50%" }}
         >
-          {layout !== "cinematic" && (
+          {layout === "hall" && (
+            <GalleryHall projects={projects} lang={lang} onOpen={(i) => openProject(i)} />
+          )}
+          {layout !== "cinematic" && layout !== "hall" && (
             <AltGalleryBody layout={layout} projects={projects} lang={lang} onOpen={(i) => openProject(i)} />
           )}
           {/* horizontal track */}
@@ -355,7 +361,8 @@ function ProjectSlide({
   lang: "fa" | "en";
   onClick: () => void;
 }) {
-  const firstImage = project.images?.[0] ?? project.color;
+  const video = project.videos?.[0];
+  const firstImage = video?.poster || project.images?.[0] || project.color;
   const isUrl = firstImage.startsWith("http") || firstImage.startsWith("/");
   const previewBg = isUrl
     ? `url(${firstImage}) center/cover`
@@ -393,6 +400,12 @@ function ProjectSlide({
         <div className="absolute left-4 top-4 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-xs font-medium text-white backdrop-blur-md">
           {project.category}
         </div>
+        {/* video badge */}
+        {video && (
+          <div className="absolute left-4 top-12 grid size-9 place-items-center rounded-full border border-white/40 bg-black/50 backdrop-blur-md">
+            <Play className="size-4 translate-x-px text-white" fill="white" />
+          </div>
+        )}
         {/* year badge */}
         <div className="absolute right-4 top-4 rounded-full border border-white/20 bg-black/40 px-3 py-1 font-mono text-xs text-white backdrop-blur-md">
           {project.year}
@@ -624,11 +637,74 @@ function ProjectPopup({
           <h3 className="text-2xl font-black text-foreground md:text-3xl">{project.title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{project.meta}</p>
 
-          {/* meta row: client / role */}
+          {/* meta row: client / role / location / dates / status */}
           <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <MetaRow icon={<Briefcase className="h-3.5 w-3.5" />} label={lang === "fa" ? "کارفرما" : "Client"} value={project.client} />
             <MetaRow icon={<User className="h-3.5 w-3.5" />} label={lang === "fa" ? "نقش" : "Role"} value={localizedRole(project.role, lang)} />
+            {project.location ? <MetaRow icon={<MapPin className="h-3.5 w-3.5" />} label={lang === "fa" ? "مکان" : "Location"} value={project.location} /> : null}
+            {project.dates ? <MetaRow icon={<Calendar className="h-3.5 w-3.5" />} label={lang === "fa" ? "بازه زمانی" : "Timeline"} value={project.dates} /> : null}
+            {project.status ? <MetaRow icon={<Tag className="h-3.5 w-3.5" />} label={lang === "fa" ? "وضعیت" : "Status"} value={project.status} /> : null}
           </div>
+
+          {/* tags */}
+          {(project.tags?.length ?? 0) > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {project.tags!.filter(Boolean).map((t, i) => (
+                <span key={i} className="rounded-full border border-border bg-surface-1 px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  #{t}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* videos */}
+          {(project.videos?.length ?? 0) > 0 && (
+            <div className="mt-6">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {lang === "fa" ? "ویدیوهای پروژه" : "Project videos"}
+              </h4>
+              <div className="grid gap-3">
+                {project.videos!.filter((v) => v?.url).map((v, i) => (
+                  <figure key={i} className="overflow-hidden rounded-xl border border-border bg-black">
+                    <video
+                      controls
+                      preload="metadata"
+                      poster={v.poster || undefined}
+                      src={v.url}
+                      className="max-h-[380px] w-full bg-black object-contain"
+                    />
+                    {v.label ? (
+                      <figcaption className="px-3 py-1.5 text-[11px] text-muted-foreground">{v.label}</figcaption>
+                    ) : null}
+                  </figure>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* process (روند پروژه) */}
+          {(project.process?.length ?? 0) > 0 && (
+            <div className="mt-6">
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {lang === "fa" ? "روند پروژه" : "Project process"}
+              </h4>
+              <ol className="relative space-y-3 border-s border-border ps-4">
+                {project.process!.filter((m) => m?.title).map((m, i) => (
+                  <li key={i} className="relative">
+                    <span
+                      className="absolute -start-[21px] top-1 grid size-3 place-items-center rounded-full"
+                      style={{ background: project.color || "var(--gfx-1)", boxShadow: `0 0 8px ${project.color || "var(--gfx-1)"}` }}
+                    />
+                    <p className="text-xs font-bold text-foreground">
+                      {m.title}
+                      {m.date ? <span className="ms-2 font-mono text-[10px] font-normal text-muted-foreground">{m.date}</span> : null}
+                    </p>
+                    {m.description ? <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{m.description}</p> : null}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
 
           {/* description */}
           <div className="mt-6">
@@ -714,7 +790,8 @@ function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string;
  * ============================================================ */
 
 function CoverArt({ p, i }: { p: ProjectArtwork; i: number }) {
-  const img = p.images?.[0];
+  const video = p.videos?.[0];
+  const img = video?.poster || p.images?.[0];
   const isImg = !!img && /^https?:|^\/|^data:/.test(img);
   return (
     <div
@@ -729,6 +806,11 @@ function CoverArt({ p, i }: { p: ProjectArtwork; i: number }) {
       ) : (
         <span className="absolute inset-0 grid place-items-center font-mono text-4xl font-black text-white/25">
           {String(i + 1).padStart(2, "0")}
+        </span>
+      )}
+      {video && (
+        <span className="absolute bottom-2 end-2 grid size-8 place-items-center rounded-full border border-white/40 bg-black/60 backdrop-blur">
+          <Play className="size-3.5 translate-x-px text-white" fill="white" />
         </span>
       )}
     </div>

@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { normalizeDigits } from "@/lib/persian-digits";
 import { projectTarget, PROJECT_TARGET_PREFIX } from "@/lib/guard-targets";
 import { useContent, type GuardLockInfo } from "@/lib/content-store";
+import { CmsVisitorsPanel } from "./cms-visitors-panel";
 
 const TARGET_SITE = "__site__";
 
@@ -712,6 +713,9 @@ export function CmsSiteGuard({ lang }: { lang: "fa" | "en" }) {
           ))}
         </div>
       </section>
+
+      {/* strict visitor management (blocked people, audit feed) */}
+      <CmsVisitorsPanel lang={lang} />
     </div>
   );
 }

@@ -38,13 +38,26 @@ export interface ProjectArtwork {
   images: string[];
   link: string;
   links?: { label: string; url: string; kind: "live" | "source" | "github" | "docs" | "other" }[];
+  /** where the project happened / was delivered (city, country or "Remote") */
+  location?: string;
+  /** human period, e.g. "2024 Q2 — 2024 Q4" */
+  dates?: string;
+  /** lifecycle badge: completed / in-progress / archived … */
+  status?: string;
+  /** free-form tags shown as chips */
+  tags?: string[];
+  /** project process milestones (روند پروژه) */
+  process?: { title: string; date: string; description: string }[];
+  /** video media: direct mp4/webm URLs (poster optional). First video is
+   *  used as the card preview when present. */
+  videos?: { url: string; poster: string; label: string }[];
   /** Set by the SERVER while this project is password-locked (Access Guard
    *  target proj:<section>:<slug>): all payload fields arrive emptied and
    *  the gallery renders a lock card until the visitor unlocks. */
   locked?: boolean;
 }
 
-export type GalleryLayout = "cinematic" | "grid" | "masonry" | "spotlight";
+export type GalleryLayout = "cinematic" | "grid" | "masonry" | "spotlight" | "hall";
 
 export interface PortfolioGalleryConfig {
   title: string;

@@ -59,7 +59,7 @@ interface ContentState {
   applyGuardAndContentRefresh: () => Promise<boolean>;
   relockGuards: (targets: string[]) => Promise<void>;
   unlockGuard: (target: string, password: string) => Promise<{
-    status: "ok" | "wrong" | "disabled" | "rate" | "error";
+    status: "ok" | "wrong" | "disabled" | "rate" | "blocked" | "error";
     remaining?: number;
   }>;
   setLang: (lang: Lang) => void;
@@ -460,6 +460,7 @@ export const useContent = create<ContentState>((set, get) => ({
         return { status: "ok" as const };
       }
       if (res.status === 423) return { status: "disabled" as const };
+      if (res.status === 403) return { status: "blocked" as const };
       if (res.status === 429) return { status: "rate" as const };
       const json = await res.json().catch(() => null);
       if (res.status === 401) {

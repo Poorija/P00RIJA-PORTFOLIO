@@ -21,6 +21,7 @@ import {
   readProtection,
   verifyUnlockAttempt,
 } from "@/lib/site-protection";
+import { VID_COOKIE, isBlockedVid, recordUnlockAttempt, verifyVidToken } from "@/lib/visitor-identity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,7 +58,22 @@ export async function POST(request: NextRequest) {
     // Owner convenience: a valid CMS session always unlocks.
     const admin = await isAuthenticated();
 
+    // Visitor identity (strict mode): a BLOCKED visitor is denied even with
+    // the correct password, and every attempt outcome lands in the audit
+    // feed shown in the CMS Visitors panel.
+    const cookieStore = await cookies();
+    const vid = verifyVidToken(cookieStore.get(VID_COOKIE)?.value) ?? "";
+    const ip = clientIp(request);
+    if (!admin && vid && (await isBlockedVid(vid))) {
+      await recordUnlockAttempt(vid, target, "blocked", ip);
+      return NextResponse.json(
+        { ok: false, blocked: true, error: "Your access has been revoked by the site owner." },
+        { status: 403, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     if (!admin && isUnlockRateLimited(clientIp(request))) {
+      if (vid) await recordUnlockAttempt(vid, target, "wrong", ip);
       return NextResponse.json(
         { ok: false, error: "Too many attempts — try again in a minute." },
         { status: 429, headers: { "Cache-Control": "no-store" } }
@@ -67,6 +83,10 @@ export async function POST(request: NextRequest) {
     let outcome = admin
       ? { status: "ok" as const, unlockDays: lock.unlockDays }
       : await verifyUnlockAttempt(target, password);
+
+    if (vid && !admin) {
+      await recordUnlockAttempt(vid, target, outcome.status === "ok" ? "ok" : outcome.status === "no-lock" ? "wrong" : outcome.status, ip);
+    }
 
     if (outcome.status === "no-lock") {
       return NextResponse.json({ ok: false, error: "No lock configured for this target" }, { status: 400 });

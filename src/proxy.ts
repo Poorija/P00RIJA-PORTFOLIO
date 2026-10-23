@@ -9,6 +9,7 @@ import {
   readProtection,
   verifyUnlockToken,
 } from "@/lib/site-protection";
+import { VID_COOKIE, isBlockedVid, verifyVidToken } from "@/lib/visitor-identity";
 
 /* ============================================================
  * P00RIJA defense proxy (Next.js 16 — proxy replaces middleware).
@@ -123,6 +124,20 @@ export async function proxy(req: NextRequest) {
     }
   } catch {
     // The guard must never take the site down on its own.
+  }
+
+  // 2.5) Blocked-visitor gate — a revoked visitor (wrong-password abuser,
+  //      manually blocked from the CMS) is kept out of the whole site: the
+  //      signed p00_vid cookie re-derives from the device fingerprint after
+  //      cookie clearing / VPN switching, so the block re-arms on the next
+  //      identify call. CMS admins are never affected.
+  try {
+    const vid = verifyVidToken(req.cookies.get(VID_COOKIE)?.value);
+    if (vid && !isAuthenticatedRequest(req) && (await isBlockedVid(vid))) {
+      return blockResponse();
+    }
+  } catch {
+    // identity storage hiccup must never take the site down
   }
 
   // 3) Defense gate.

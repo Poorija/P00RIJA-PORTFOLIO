@@ -2903,8 +2903,14 @@ function PortfolioGalleryFields({ value, onChange, lang }: { value: SiteContent[
           { key: "images", label: lang === "fa" ? "تصاویر یا رنگ‌ها" : "Images or colors", type: "stringlist" },
           { key: "specs", label: lang === "fa" ? "مشخصات" : "Specifications", type: "objectlist", objectFields: [{ key: "key", label: "Key", type: "text" }, { key: "value", label: "Value", type: "text" }] },
           { key: "links", label: lang === "fa" ? "لینک‌های پروژه" : "Project links", type: "objectlist", objectFields: [{ key: "label", label: "Label", type: "text" }, { key: "url", label: "URL", type: "text" }, { key: "kind", label: "live/source/github/docs/other", type: "text" }] },
+          { key: "location", label: lang === "fa" ? "مکان (شهر/کشور یا Remote)" : "Location (city/country or Remote)", type: "text" },
+          { key: "dates", label: lang === "fa" ? "بازه زمانی (مثلاً ۲۰۲۴ Q2 — Q4)" : "Period (e.g. 2024 Q2 — Q4)", type: "text" },
+          { key: "status", label: lang === "fa" ? "وضعیت (completed/in-progress/…)" : "Status (completed/in-progress/…)", type: "text" },
+          { key: "tags", label: lang === "fa" ? "برچسب‌ها" : "Tags", type: "stringlist" },
+          { key: "process", label: lang === "fa" ? "روند پروژه (مرحله‌ها)" : "Project process (milestones)", type: "objectlist", objectFields: [{ key: "title", label: lang === "fa" ? "عنوان مرحله" : "Milestone", type: "text" }, { key: "date", label: lang === "fa" ? "تاریخ" : "Date", type: "text" }, { key: "description", label: lang === "fa" ? "توضیح" : "Description", type: "text" }] },
+          { key: "videos", label: lang === "fa" ? "ویدیوها (mp4/webm + پوستر اختیاری)" : "Videos (mp4/webm + optional poster)", type: "objectlist", objectFields: [{ key: "url", label: "URL", type: "text" }, { key: "poster", label: lang === "fa" ? "پوستر" : "Poster", type: "text" }, { key: "label", label: lang === "fa" ? "عنوان" : "Label", type: "text" }] },
         ]}
-        makeEmpty={() => ({ title: "", meta: "", category: "", color: "#169cff", year: "", client: "", role: "", description: "", specs: [{ key: "", value: "" }], images: ["#169cff"], link: "", links: [{ label: "GitHub", url: "", kind: "github" }] })}
+        makeEmpty={() => ({ title: "", meta: "", category: "", color: "#169cff", year: "", client: "", role: "", description: "", specs: [{ key: "", value: "" }], images: ["#169cff"], link: "", links: [{ label: "GitHub", url: "", kind: "github" }], location: "", dates: "", status: "completed", tags: [], process: [], videos: [] })}
       />
     </SubsectionBox>
   );
@@ -3175,6 +3181,7 @@ function SectionForm({
                   <option value="grid">{lang === "fa" ? "شبکه‌ای" : "Grid"}</option>
                   <option value="masonry">{lang === "fa" ? "آجرچین" : "Masonry"}</option>
                   <option value="spotlight">{lang === "fa" ? "اسپات‌لایت" : "Spotlight"}</option>
+                  <option value="hall">{lang === "fa" ? "تالار سه‌بعدی (راهرو تعاملی)" : "3D Hall (interactive walkthrough)"}</option>
                 </select>
               </label>
               <TextField label="عنوان گالری (gallery.title)" value={gallery.title ?? ""} onChange={(x) => setGallery("title", x)} />
