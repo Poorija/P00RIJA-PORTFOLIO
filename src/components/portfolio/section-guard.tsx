@@ -124,7 +124,9 @@ export function GuardUnlockDialog({
       aria-modal="true"
       aria-label={fa ? "بازکردن بخش قفل‌شده" : "Unlock protected section"}
     >
-      <div className="absolute inset-0 bg-background/85 backdrop-blur-md" onClick={onClose} aria-hidden />
+      {/* Solid backdrop on mobile (backdrop-filter paints unreliably on iOS
+          WebKit with the keyboard up); blurred glass from sm up. */}
+      <div className="absolute inset-0 bg-background/95 sm:bg-background/85 sm:backdrop-blur-md" onClick={onClose} aria-hidden />
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 14 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -379,29 +381,62 @@ export function SectionGuardShell({
   );
 
   // ── mobile: skeleton teaser (NO real children mounted → no WebGL, no
-  //    blur filter, a couple of gradients is the entire cost) ────────────
+  //    blur filter). Everything is IN FLOW — no absolutely-positioned
+  //    overlay, no backdrop-filter: both are unreliable to paint on iOS
+  //    WebKit inside scroll containers (overlay rendered half-cut away
+  //    from its section and vanished when scrolled into view) ──────────
   if (isMobile) {
     return (
-      <div className="relative min-h-[440px] overflow-hidden" data-guard-target={target}>
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background:
-              `radial-gradient(120% 90% at 20% 0%, color-mix(in oklch, ${accent} 16%, transparent), transparent 60%),` +
-              `radial-gradient(100% 80% at 90% 100%, color-mix(in oklch, ${accent} 10%, transparent), transparent 55%)`,
-          }}
-        />
-        {/* faint content placeholders so the teaser reads as "a section" */}
-        <div aria-hidden className="absolute inset-x-6 top-10 space-y-3 opacity-25 sm:inset-x-12">
-          <div className="h-3 w-24 rounded-full" style={{ background: accent }} />
-          <div className="h-7 w-3/4 rounded-lg bg-foreground/25" />
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="h-28 rounded-2xl border border-border bg-background/50" />
-            <div className="h-28 rounded-2xl border border-border bg-background/50" />
-          </div>
+      <div
+        data-guard-target={target}
+        className="flex min-h-[440px] flex-col items-center justify-center gap-3 px-6 py-14 text-center"
+        style={{
+          background:
+            `radial-gradient(120% 90% at 20% 0%, color-mix(in oklch, ${accent} 16%, transparent), transparent 60%),` +
+            `radial-gradient(100% 80% at 90% 100%, color-mix(in oklch, ${accent} 10%, transparent), transparent 55%)`,
+        }}
+      >
+        <div className="grid size-12 place-items-center rounded-full border border-border bg-background shadow-lg">
+          <Lock className="size-5 text-[var(--sec-1)]" />
         </div>
-        {lockOverlay}
+        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+          {fa ? "بخش محافظت‌شده" : "protected section"}
+        </p>
+        <h3 className="text-base font-black text-foreground">{displayLabel}</h3>
+        {disabled ? (
+          <p className="max-w-xs text-xs leading-6 text-amber-300">
+            {fa
+              ? "این قفل پس از تلاش‌های ناموفق غیرفعال شده است."
+              : "This lock is disabled after too many wrong attempts."}
+          </p>
+        ) : (
+          <>
+            <p className="max-w-xs text-xs leading-6 text-muted-foreground">
+              {fa
+                ? "برای مشاهده این بخش، رمز عبور را وارد کنید."
+                : "Enter the password to reveal this section."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
+              className={cn(
+                "mt-1 inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-bold transition-all",
+                "border-[var(--sec-1)]/40 bg-background text-foreground",
+                "hover:border-[var(--sec-1)] hover:bg-[var(--sec-1)]/15"
+              )}
+            >
+              <Lock className="size-4 text-[var(--sec-1)]" />
+              {fa ? "ورود با رمز" : "Enter password"}
+            </button>
+            {remaining !== null && lock && lock.failedAttempts > 0 && (
+              <p className="font-mono text-[10px] text-muted-foreground/80">
+                {fa
+                  ? `${remaining} تلاش باقی مانده`
+                  : `${remaining} attempt${remaining === 1 ? "" : "s"} remaining`}
+              </p>
+            )}
+          </>
+        )}
         <AnimatePresence>
           {dialogOpen && lock && (
             <GuardUnlockDialog lock={lock} label={displayLabel} onClose={() => setDialogOpen(false)} />
