@@ -78,6 +78,7 @@ tar -cf - \
   --exclude './entry-*.png' \
   --exclude './guard-*.png' \
   --exclude './gate-*.png' \
+  --exclude './live-*.png' \
   --exclude './tsconfig.tsbuildinfo' \
   --exclude './license-server' \
   --exclude './docker-compose.license.yml' \
