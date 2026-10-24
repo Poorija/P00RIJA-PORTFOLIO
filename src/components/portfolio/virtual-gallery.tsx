@@ -20,6 +20,7 @@ import { useContent } from "@/lib/content-store";
 import { projectTarget } from "@/lib/guard-targets";
 import { GuardUnlockDialog } from "./section-guard";
 import { GalleryHall } from "./gallery-hall";
+import { GalleryCatalog } from "./gallery-catalog";
 import { useSuspendLenis } from "./smooth-scroll";
 import type { GalleryLayout, ProjectArtwork } from "@/lib/content-types";
 
@@ -59,6 +60,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   const [active, setActive] = useState<number | null>(null);
   const [current, setCurrent] = useState(0);
   const [lockDialogIdx, setLockDialogIdx] = useState<number | null>(null);
+  const [catalogIdx, setCatalogIdx] = useState<number | null>(null);
 
   /* Per-project Access Guard: the SERVER already replaced locked projects
    * with identity-only stubs (locked:true, empty payload). Clicking such a
@@ -67,6 +69,11 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   const openProject = (i: number) => {
     if (projects[i]?.locked) {
       setLockDialogIdx(i);
+      return;
+    }
+    if (layout === "hall") {
+      // In the 3D hall the artwork "detail" is its page-flip catalogue book.
+      setCatalogIdx(i);
       return;
     }
     setActive(i);
@@ -270,6 +277,17 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
             label={lockDialogProject.title}
             onClose={() => setLockDialogIdx(null)}
             onUnlocked={() => setLockDialogIdx(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Artwork catalogue book (hall mode) */}
+      <AnimatePresence>
+        {catalogIdx !== null && projects[catalogIdx] && !projects[catalogIdx].locked && (
+          <GalleryCatalog
+            project={projects[catalogIdx]}
+            lang={lang}
+            onClose={() => setCatalogIdx(null)}
           />
         )}
       </AnimatePresence>
