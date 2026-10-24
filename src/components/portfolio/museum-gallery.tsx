@@ -267,7 +267,7 @@ export function MuseumGallery({
     const disposables: Array<THREE.Texture | THREE.Material | THREE.BufferGeometry> = [];
     const track = <T extends THREE.Texture | THREE.Material | THREE.BufferGeometry>(x: T): T => { disposables.push(x); return x; };
 
-    const floorTex = track(placeholderTexture("#2a2536"));
+    const floorTex = track(placeholderTexture("#3a3350"));
     floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
     floorTex.repeat.set(40, 40);
     const floorMat = track(new THREE.MeshLambertMaterial({ map: floorTex }));

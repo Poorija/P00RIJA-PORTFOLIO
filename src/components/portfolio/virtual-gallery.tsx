@@ -209,7 +209,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
       </div>
 
       {/* 3D horizontal scroll — each project is a full-width/full-height slide */}
-      <div className="relative z-10 min-h-0 flex-1 overflow-hidden p-3 sm:p-4 md:p-6">
+      <div className={layout === "hall" ? "relative z-10 min-h-0 flex-1 overflow-hidden" : "relative z-10 min-h-0 flex-1 overflow-hidden p-3 sm:p-4 md:p-6"}>
         {/* Floating X close button — always visible */}
         <button
           onClick={onClose}
@@ -221,8 +221,10 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
 
         {/* perspective wrapper for 3D depth */}
         <div
-          className="relative mx-auto h-full w-full max-w-[1500px] overflow-hidden rounded-2xl border border-white/10 bg-black/10 shadow-2xl shadow-black/35 md:rounded-[28px]"
-          style={{ perspective: "1400px", perspectiveOrigin: "50% 50%" }}
+          className={layout === "hall"
+            ? "relative h-full w-full overflow-hidden"
+            : "relative mx-auto h-full w-full max-w-[1500px] overflow-hidden rounded-2xl border border-white/10 bg-black/10 shadow-2xl shadow-black/35 md:rounded-[28px]"}
+          style={layout === "hall" ? undefined : { perspective: "1400px", perspectiveOrigin: "50% 50%" }}
         >
           {layout === "hall" && (
             <MuseumGallery
