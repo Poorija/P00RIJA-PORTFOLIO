@@ -234,6 +234,7 @@ export function GalleryCatalog({
 
   return (
     <motion.div
+      data-gallery-catalog
       className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

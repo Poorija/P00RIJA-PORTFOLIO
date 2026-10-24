@@ -120,6 +120,7 @@ export function GuardUnlockDialog({
 
   return (
     <motion.div
+      data-guard-dialog
       // Mobile: top-aligned with breathing room so the on-screen keyboard
       // never covers the PIN input (the dialog stays above the keyplane).
       className="fixed inset-0 z-[140] flex items-start justify-center overflow-y-auto p-4 pt-[10vh] sm:items-center sm:pt-4"

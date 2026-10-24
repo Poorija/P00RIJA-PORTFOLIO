@@ -19,7 +19,7 @@ import {
 import { useContent } from "@/lib/content-store";
 import { projectTarget } from "@/lib/guard-targets";
 import { GuardUnlockDialog } from "./section-guard";
-import { GalleryHall } from "./gallery-hall";
+import { MuseumGallery } from "./museum-gallery";
 import { GalleryCatalog } from "./gallery-catalog";
 import { useSuspendLenis } from "./smooth-scroll";
 import type { GalleryLayout, ProjectArtwork } from "@/lib/content-types";
@@ -61,6 +61,8 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   const [current, setCurrent] = useState(0);
   const [lockDialogIdx, setLockDialogIdx] = useState<number | null>(null);
   const [catalogIdx, setCatalogIdx] = useState<number | null>(null);
+  const [catalogLabel, setCatalogLabel] = useState("");
+  const [lockReq, setLockReq] = useState<{ target: string; label: string } | null>(null);
 
   /* Per-project Access Guard: the SERVER already replaced locked projects
    * with identity-only stubs (locked:true, empty payload). Clicking such a
@@ -72,8 +74,9 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
       return;
     }
     if (layout === "hall") {
-      // In the 3D hall the artwork "detail" is its page-flip catalogue book.
+      // In the 3D museum the artwork "detail" is its page-flip catalogue book.
       setCatalogIdx(i);
+      setCatalogLabel(sectionId ?? "");
       return;
     }
     setActive(i);
@@ -91,6 +94,9 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   // Escape closes popup first, then the gallery. Arrow keys navigate slides.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // An overlay ABOVE the gallery (catalogue book / guard PIN) owns Esc —
+      // don't close the whole gallery underneath it.
+      if (document.querySelector("[data-gallery-catalog], [data-guard-dialog]")) return;
       if (e.key === "Escape") {
         if (active !== null) setActive(null);
         else onClose();
@@ -172,7 +178,15 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
           style={{ perspective: "1400px", perspectiveOrigin: "50% 50%" }}
         >
           {layout === "hall" && (
-            <GalleryHall projects={projects} lang={lang} onOpen={(i) => openProject(i)} />
+            <MuseumGallery
+              lang={lang}
+              onOpenCatalog={(project, wingLabel) => {
+                const idx = projects.indexOf(project);
+                setCatalogIdx(idx >= 0 ? idx : projects.findIndex((p) => p.title === project.title));
+                setCatalogLabel(wingLabel);
+              }}
+              onRequestUnlock={(target, label) => setLockReq({ target, label })}
+            />
           )}
           {layout !== "cinematic" && layout !== "hall" && (
             <AltGalleryBody layout={layout} projects={projects} lang={lang} onOpen={(i) => openProject(i)} />
@@ -281,13 +295,25 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
         )}
       </AnimatePresence>
 
-      {/* Artwork catalogue book (hall mode) */}
+      {/* Artwork catalogue book (hall/museum mode) */}
       <AnimatePresence>
         {catalogIdx !== null && projects[catalogIdx] && !projects[catalogIdx].locked && (
           <GalleryCatalog
             project={projects[catalogIdx]}
             lang={lang}
             onClose={() => setCatalogIdx(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Access-Guard unlocks requested from the museum (locked wings/projects) */}
+      <AnimatePresence>
+        {lockReq && guardSections[lockReq.target] && (
+          <GuardUnlockDialog
+            lock={guardSections[lockReq.target]}
+            label={lockReq.label}
+            onClose={() => setLockReq(null)}
+            onUnlocked={() => setLockReq(null)}
           />
         )}
       </AnimatePresence>
