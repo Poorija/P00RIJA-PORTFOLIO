@@ -165,8 +165,10 @@ export function GalleryCatalog({
     if (!d || !l || l.from !== d.from) return;
     const dx = e.clientX - d.x0;
     if (Math.abs(dx) > 4) d.moved = true;
-    // forward-drag sign in screen space: LTR next = leftward (−), RTL next = rightward (+)
-    const sign = (d.dir === 1) === !fa ? -1 : 1;
+    // Drag direction follows the LANGUAGE only: LTR books flip leftward,
+    // RTL books flip rightward — for BOTH next and prev. (dir-dependent
+    // signs broke prev: the clamp pinned progress and nothing moved.)
+    const sign = fa ? 1 : -1;
     const progress = Math.max(0, Math.min(1, (dx * sign) / d.half + (d.dir === 1 ? 0 : 1)));
     setFlip({ ...l, progress });
   };

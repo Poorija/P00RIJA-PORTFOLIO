@@ -290,11 +290,16 @@ export function MuseumGallery({
       return m;
     };
 
-    /* ---- walkable areas for collision ---- */
-    type Area = { kind: "circle"; r: number } | { kind: "rect"; cx: number; cz: number; hw: number; hl: number; angle: number; cos: number; sin: number };
-  // Hub walkable circle is SMALLER than the ring and stays inside the
-  // corridor walls at every gate approach (see rect start below).
-  const areas: Area[] = [{ kind: "circle", r: 4.6 }];
+    /* ---- walkable collision: corridor strips + hub circle ----
+     * Semantics matter here. A union of shrunken areas (old approach) leaves
+     * thin "outside everywhere" seams; any seam meant the recovery lerp yanked
+     * the visitor out of the corridor. Instead walkable() is defined by the
+     * WALLS: you may stand anywhere inside a corridor strip or inside the hub
+     * circle, except behind a corridor's wall planes (the old see-through
+     * leak). Walking hub↔corridor is then seamless by construction. */
+    type Collider = { dir: { x: number; z: number }; perp: { x: number; z: number }; alongMin: number; alongMax: number; halfW: number; wallStart: number; wallPlane: number };
+    const colliders: Collider[] = [];
+    const HUB_WALK = HUB_R - 0.42; // ring wall at HUB_R, keep a body radius
 
     /* ---- hub ---- */
     const hubFloor = new THREE.Mesh(new THREE.CircleGeometry(HUB_R, 48), floorMat);
@@ -374,16 +379,21 @@ export function MuseumGallery({
       endWall.rotation.y = Math.atan2(-dir.x, -dir.z);
       scene.add(endWall);
 
-      // walkable rect (corridor)
-      const cx = dir.x * (HUB_R + length / 2 - 2), cz = dir.z * (HUB_R + length / 2 - 2);
-      // Rect starts 2.2 from the hub CENTER (well inside the hub circle)
-      // so hub→corridor walking is seamless, and stops 0.5 before the end
-      // wall. Half-width keeps the visitor 0.55 inside each wall.
-      const rStart = 2.2;
-      const rEnd = HUB_R + length - 2.5;
-      const rcx = dir.x * ((rStart + rEnd) / 2);
-      const rcz = dir.z * ((rStart + rEnd) / 2);
-      areas.push({ kind: "rect", cx: rcx, cz: rcz, hw: WING_W / 2 - 0.55, hl: (rEnd - rStart) / 2, angle: layout.angle, cos: Math.cos(layout.angle), sin: Math.sin(layout.angle) });
+      // corridor collider. Axis coordinates: along = distance from the hub
+      // center along `dir`, across = sideways distance from the axis.
+      //   alongMin 3.6  — walkable before the walls visually start (HUB_R−2),
+      //                    so the gate throat is one continuous floor.
+      //   halfW         — wall at ±WING_W/2 minus a 0.42 body radius.
+      //   wallPlane     — where the visible wall plane sits; hub points
+      //                    beyond it (and past wallStart) are behind the wall.
+      colliders.push({
+        dir, perp,
+        alongMin: HUB_R - 2.6,
+        alongMax: HUB_R + length - 2.4,
+        halfW: WING_W / 2 - 0.42,
+        wallStart: HUB_R - 2,
+        wallPlane: WING_W / 2,
+      });
 
       // artworks
       for (const spot of layout.artworks) {
@@ -497,10 +507,15 @@ export function MuseumGallery({
         cap.position.set(pillar.position.x, 3.62, pillar.position.z);
         scene.add(cap);
       }
+      // lintel + floor bar span ACROSS the gate (along `perp`): rotation.y = φ
+      // maps the box's +x axis to (cos φ, −sin φ), so align it with perp
+      // (−sin a, cos a) via φ = atan2(−cos a, −sin a). (-angle pointed them
+      // ALONG the corridor — the stray diagonal beam bug.)
+      const acrossRot = Math.atan2(-Math.cos(layout.angle), -Math.sin(layout.angle));
       const lintel = new THREE.Mesh(boxGeo, lintelMat);
       lintel.scale.set(WING_W + 0.2, 0.34, 0.34);
       lintel.position.set(px, 3.45, pz);
-      lintel.rotation.y = -layout.angle;
+      lintel.rotation.y = acrossRot;
       scene.add(lintel);
       // BIG sign above the gate (name + direction hint)
       const signTex = track(makeTextTexture(
@@ -524,7 +539,7 @@ export function MuseumGallery({
       const bar = new THREE.Mesh(boxGeo, track(new THREE.MeshBasicMaterial({ color })));
       bar.scale.set(WING_W - 0.1, 0.05, 0.34);
       bar.position.set(layout.dir.x * (HUB_R - 0.02), 0.03, layout.dir.z * (HUB_R - 0.02));
-      bar.rotation.y = -layout.angle;
+      bar.rotation.y = acrossRot;
       scene.add(bar);
     }
 
@@ -696,30 +711,34 @@ export function MuseumGallery({
     const look = { id: -1 as number, x: 0, y: 0 };
     const autoGoto = { active: false, pos: new THREE.Vector3(), yaw: 0, then: null as null | (() => void), deadline: 0 };
 
-    const inArea = (x: number, z: number): boolean => {
-      for (const a of areas) {
-        if (a.kind === "circle") {
-          if (x * x + z * z <= (a.r) * (a.r)) return true;
-        } else {
-          const dx = x - a.cx, dz = z - a.cz;
-          const lx = dx * a.cos + dz * a.sin;
-          const lz = -dx * a.sin + dz * a.cos;
-          if (Math.abs(lx) <= a.hw && Math.abs(lz) <= a.hl) return true;
+    const walkable = (x: number, z: number): boolean => {
+      // Inside a corridor strip?
+      for (const c of colliders) {
+        const along = x * c.dir.x + z * c.dir.z;
+        if (along < c.alongMin || along > c.alongMax) continue;
+        const across = x * c.perp.x + z * c.perp.z;
+        if (Math.abs(across) <= c.halfW) return true;
+      }
+      // Hub circle — but never behind a corridor wall plane.
+      for (const c of colliders) {
+        if (x * c.dir.x + z * c.dir.z > c.wallStart) {
+          const across = x * c.perp.x + z * c.perp.z;
+          if (Math.abs(across) > c.wallPlane) return false;
         }
       }
-      return false;
+      return x * x + z * z <= HUB_WALK * HUB_WALK;
     };
 
     const movePlayer = (dx: number, dz: number) => {
-      if (!inArea(player.pos.x, player.pos.z)) {
-        // Edge case recovery: glide straight back to the hub center (never
-        // free-roam the void outside the building).
-        player.pos.x += (0 - player.pos.x) * 0.06;
-        player.pos.z += (0 - player.pos.z) * 0.06;
+      if (!walkable(player.pos.x, player.pos.z)) {
+        // Last-resort recovery only — with wall-based walkable() a legal
+        // move can never leave the building, so this stays silent.
+        player.pos.x += (0 - player.pos.x) * 0.05;
+        player.pos.z += (0 - player.pos.z) * 0.05;
         return;
       }
-      if (inArea(player.pos.x + dx, player.pos.z)) player.pos.x += dx;
-      if (inArea(player.pos.x, player.pos.z + dz)) player.pos.z += dz;
+      if (walkable(player.pos.x + dx, player.pos.z)) player.pos.x += dx;
+      if (walkable(player.pos.x, player.pos.z + dz)) player.pos.z += dz;
     };
 
     /* keyboard */
@@ -864,7 +883,8 @@ export function MuseumGallery({
     (window as unknown as { __museumDebug?: () => unknown }).__museumDebug = () => ({
       pos: [player.pos.x, player.pos.z], yaw: player.yaw,
       keys: [...keys], auto: autoGoto.active,
-      areas: areas.length, arts: artworks.length,
+      walkable: walkable(player.pos.x, player.pos.z),
+      colliders: colliders.length, arts: artworks.length,
     });
 
     /* ---------------- loop ---------------- */
@@ -903,8 +923,8 @@ export function MuseumGallery({
         const k = Math.min(1, dt * 4.5);
         const nx = player.pos.x + (autoGoto.pos.x - player.pos.x) * k;
         const nz = player.pos.z + (autoGoto.pos.z - player.pos.z) * k;
-        if (inArea(nx, player.pos.z)) player.pos.x = nx;
-        if (inArea(player.pos.x, nz)) player.pos.z = nz;
+        if (walkable(nx, player.pos.z)) player.pos.x = nx;
+        if (walkable(player.pos.x, nz)) player.pos.z = nz;
         let dy = autoGoto.yaw - player.yaw;
         while (dy > Math.PI) dy -= 2 * Math.PI;
         while (dy < -Math.PI) dy += 2 * Math.PI;
