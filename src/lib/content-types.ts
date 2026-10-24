@@ -51,6 +51,11 @@ export interface ProjectArtwork {
   /** video media: direct mp4/webm URLs (poster optional). First video is
    *  used as the card preview when present. */
   videos?: { url: string; poster: string; label: string }[];
+  /** FEATURED/cover image — picked from the project's images or uploaded
+   *  separately. Highest preview priority everywhere (cards, slides, the
+   *  3D museum wall, catalogue cover). When empty the museum renders a
+   *  typographic plate (project title + category) instead. */
+  featured?: string;
   /** Set by the SERVER while this project is password-locked (Access Guard
    *  target proj:<section>:<slug>): all payload fields arrive emptied and
    *  the gallery renders a lock card until the visitor unlocks. */

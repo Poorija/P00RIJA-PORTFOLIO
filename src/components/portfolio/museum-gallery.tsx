@@ -60,7 +60,10 @@ interface WingLayout {
 const HUB_R = 6.2;
 const WING_W = 5.6;
 const EYE = 1.65;
-const STEP = 5.2; // distance between artworks along a wall
+const STEP = 5.2;   // distance between artworks along a wall
+const ART_W = 1.9;  // artwork plane width (museum scale)
+const ART_H = 1.32; // artwork plane height
+const VIEW_DIST = 2.65; // natural museum viewing distance from a piece
 
 function layoutWings(wings: WingDef[]): WingLayout[] {
   const n = Math.max(1, wings.length);
@@ -106,6 +109,48 @@ function makeTextTexture(lines: { text: string; size: number; bold?: boolean; co
   return tex;
 }
 
+function softRadialTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+  g.addColorStop(0, "rgba(255,244,214,1)");
+  g.addColorStop(0.45, "rgba(255,236,190,0.45)");
+  g.addColorStop(1, "rgba(255,236,190,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** typographic wall plate when a project has no image: big title + category */
+function makeArtworkPlate(p: ProjectArtwork, fa: boolean, accent: string): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 768; canvas.height = 540;
+  const ctx = canvas.getContext("2d")!;
+  const grad = ctx.createLinearGradient(0, 0, 768, 540);
+  grad.addColorStop(0, "#191624");
+  grad.addColorStop(1, "#221d33");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 768, 540);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 6;
+  ctx.strokeRect(24, 24, 720, 492);
+  ctx.direction = "rtl";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#f5f1e8";
+  const title = (p.title || "—");
+  ctx.font = `bold ${title.length > 18 ? 52 : 68}px Vazirmatn, Tahoma, sans-serif`;
+  ctx.fillText(title, 384, 268);
+  ctx.fillStyle = accent;
+  ctx.font = "36px Vazirmatn, Tahoma, sans-serif";
+  ctx.fillText([p.category, p.year].filter(Boolean).join(" · ") || (fa ? "پروژه" : "project"), 384, 348);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function placeholderTexture(color: string): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 64; canvas.height = 64;
@@ -124,10 +169,14 @@ function placeholderTexture(color: string): THREE.CanvasTexture {
 
 export function MuseumGallery({
   lang,
+  spawnWingId,
   onOpenCatalog,
   onRequestUnlock,
 }: {
   lang: "fa" | "en";
+  /** the section whose gallery button was clicked — the visitor ENTERS
+   *  that wing and stays there until they choose another via the guide. */
+  spawnWingId?: string;
   onOpenCatalog: (project: ProjectArtwork, wingLabel: string) => void;
   onRequestUnlock: (target: string, label: string) => void;
 }) {
@@ -135,6 +184,9 @@ export function MuseumGallery({
   const mountRef = useRef<HTMLDivElement>(null);
   const minimapPlayerRef = useRef<SVGGElement>(null);
   const [ready, setReady] = useState(false);
+  const [intro, setIntro] = useState(true);
+  const [fade, setFade] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [focused, setFocused] = useState<{ kind: "project" | "lockedProj" | "lockedWing"; title: string; sub: string; wingLabel: string } | null>(null);
   const [locked, setLocked] = useState(false); // pointer-lock state (desktop)
 
@@ -300,7 +352,7 @@ export function MuseumGallery({
 
       // walkable rect (corridor)
       const cx = dir.x * (HUB_R + length / 2 - 2), cz = dir.z * (HUB_R + length / 2 - 2);
-      areas.push({ kind: "rect", cx, cz, hw: WING_W / 2 - 0.45, hl: length / 2 - 0.4, angle: layout.angle, cos: Math.cos(layout.angle), sin: Math.sin(layout.angle) });
+      areas.push({ kind: "rect", cx, cz, hw: WING_W / 2 - 0.8, hl: length / 2 - 0.4, angle: layout.angle, cos: Math.cos(layout.angle), sin: Math.sin(layout.angle) });
 
       // artworks
       for (const spot of layout.artworks) {
@@ -320,7 +372,7 @@ export function MuseumGallery({
         group.lookAt(lookAt);
         scene.add(group);
 
-        const w = 2.1, h = 1.55;
+        const w = ART_W, h = ART_H;
         // dark frame
         const frame = new THREE.Mesh(planeGeo, frameMat);
         frame.scale.set(w + 0.18, h + 0.18, 1);
@@ -336,22 +388,34 @@ export function MuseumGallery({
           const lockTex = track(makeTextTexture([{ text: project.title || (fa ? "اثر محافظت‌شده" : "Protected"), size: 40, bold: true }, { text: fa ? "قفل با رمز" : "password-protected", size: 24, color: "#e8c46a" }], 512, 384, def.color));
           art.material = track(new THREE.MeshBasicMaterial({ map: lockTex }));
         } else {
-          const src = project.videos?.[0]?.poster || project.images?.find((i) => /^(https?:|\/|data:)/.test(i));
+          // Featured image > video poster > first image; with none, the wall
+          // shows a typographic plate (project title + category).
+          const src = project.featured || project.videos?.[0]?.poster || project.images?.find((i) => /^(https?:|\/|data:)/.test(i));
           if (src) {
             loader.load(src, (tex) => {
               tex.colorSpace = THREE.SRGBColorSpace;
               disposables.push(tex);
               (art.material as THREE.MeshBasicMaterial).map = tex;
               (art.material as THREE.MeshBasicMaterial).needsUpdate = true;
-            }, undefined, () => { /* keep placeholder */ });
+            }, undefined, () => { /* keep plate */ });
+          } else {
+            const plate = track(makeArtworkPlate(project, fa, def.color));
+            (art.material as THREE.MeshBasicMaterial).map = plate;
+            (art.material as THREE.MeshBasicMaterial).needsUpdate = true;
           }
         }
 
-        // light cone over the piece (fake, additive)
-        const cone = new THREE.Mesh(planeGeo, glowMat);
-        cone.scale.set(w + 1.1, 2.6, 1);
-        cone.position.set(0, 1.55, 0.12);
-        group.add(cone);
+        // SOFT picture light: radial-gradient halo above the frame +
+        // a faint colored wash on the wall behind (no harsh rectangles).
+        const glowTex = track(softRadialTexture());
+        const halo = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: glowTex, color: 0xfff0cf, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false })));
+        halo.scale.set(3.4, 2.4, 1);
+        halo.position.set(0, h / 2 + 0.7, 0.35);
+        group.add(halo);
+        const backWash = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(def.color), transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
+        backWash.scale.set(5.0, 4.0, 1);
+        backWash.position.set(0, 0.1, -0.25);
+        group.add(backWash);
 
         // placard
         const placardTex = track(makeTextTexture([{ text: project.title || "—", size: 34, bold: true }, { text: [project.category, project.year].filter(Boolean).join(" · ") || " ", size: 22, color: "#b9b2d0" }], 512, 220, def.color));
@@ -361,13 +425,12 @@ export function MuseumGallery({
         group.add(placard);
 
         const forward = new THREE.Vector3().subVectors(lookAt, worldPos).setY(0).normalize();
-        // stand INSIDE the corridor, looking back at the piece (the wall
-        // plane is 0.18 off the structural wall; 1.35m in front of it is
-        // comfortably inside the walkable rect).
+        // natural viewing spot: VIEW_DIST off the wall, dead-center of
+        // the piece, at eye height — the artwork frames the view nicely.
         const stand = new THREE.Vector3(
-          worldPos.x + forward.x * 1.35,
+          worldPos.x + forward.x * VIEW_DIST,
           EYE,
-          worldPos.z + forward.z * 1.35
+          worldPos.z + forward.z * VIEW_DIST
         );
         artworks.push({ wing: def, layout, project, pos: worldPos, forward, spot: stand });
       }
@@ -396,11 +459,74 @@ export function MuseumGallery({
       scene.add(label);
     }
 
+    /* ---------------- ambience: light strips, baseboards, dust ------- */
+    const stripMat = track(new THREE.MeshBasicMaterial({ color: 0xffe9b8 }));
+    const boardMatByWing = new Map<string, THREE.MeshBasicMaterial>();
+    for (const layout of layouts) {
+      boardMatByWing.set(layout.def.id, track(new THREE.MeshBasicMaterial({ color: new THREE.Color(layout.def.color) })));
+      // ceiling light strips every half-step along the corridor
+      for (let d = HUB_R + 2; d < HUB_R + layout.length - 2; d += STEP / 2) {
+        const strip = new THREE.Mesh(boxGeo, stripMat);
+        strip.scale.set(1.6, 0.06, 0.22);
+        strip.position.set(layout.dir.x * d, 3.32, layout.dir.z * d);
+        strip.rotation.y = -layout.angle;
+        scene.add(strip);
+        // warm halo under each strip (soft, additive)
+        const halo = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color: 0xffdf9e, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false })));
+        halo.scale.set(3.4, 1.1, 1);
+        halo.position.set(layout.dir.x * d, 3.1, layout.dir.z * d);
+        scene.add(halo);
+      }
+      // colored baseboard (wayfinding line) along both walls
+      const perp = { x: -layout.dir.z, z: layout.dir.x };
+      const cx = layout.dir.x * (HUB_R + layout.length / 2 - 2);
+      const cz = layout.dir.z * (HUB_R + layout.length / 2 - 2);
+      const board = boardMatByWing.get(layout.def.id)!;
+      for (const side of [-1, 1] as const) {
+        const b = new THREE.Mesh(boxGeo, board);
+        b.scale.set(layout.length - 1, 0.12, 0.05);
+        b.position.set(cx + perp.x * side * (WING_W / 2 - 0.02), 0.1, cz + perp.z * side * (WING_W / 2 - 0.02));
+        b.rotation.y = -layout.angle;
+        scene.add(b);
+      }
+    }
+
+    // floating dust motes in the light (soft round sprites, slow drift)
+    const DUST = 130;
+    const dustGeo = track(new THREE.BufferGeometry());
+    const dustPos = new Float32Array(DUST * 3);
+    const dustSeed = new Float32Array(DUST);
+    for (let i = 0; i < DUST; i++) {
+      const layout = layouts[i % layouts.length];
+      const d = HUB_R + Math.random() * (layouts[0].length - 4);
+      dustPos[i * 3] = layout.dir.x * d + (Math.random() - 0.5) * (WING_W - 1);
+      dustPos[i * 3 + 1] = 0.4 + Math.random() * 2.6;
+      dustPos[i * 3 + 2] = layout.dir.z * d + (Math.random() - 0.5) * (WING_W - 1);
+      dustSeed[i] = Math.random() * Math.PI * 2;
+    }
+    dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
+    const dustMat = track(new THREE.PointsMaterial({
+      map: track(softRadialTexture()), color: 0xffe8c4, size: 0.09, sizeAttenuation: true,
+      transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    const dust = new THREE.Points(dustGeo, dustMat);
+    scene.add(dust);
+
     /* ---------------- player state & controls ---------------- */
 
+    // Spawn INSIDE the visitor's own wing (the section whose gallery was
+    // clicked), facing down its corridor — not the hub crossroads.
+    const spawnWing = layouts.find((l) => l.def.id === spawnWingId) ?? layouts[0];
+    const spawnAt = (l: WingLayout) => {
+      const px = l.dir.x * (HUB_R + 2.2);
+      const pz = l.dir.z * (HUB_R + 2.2);
+      const yaw = Math.atan2(-l.dir.x, -l.dir.z);
+      return { pos: new THREE.Vector3(px, EYE, pz), yaw };
+    };
+    const spawn = spawnAt(spawnWing);
     const player = {
-      pos: new THREE.Vector3(0, EYE, 0.5),
-      yaw: layouts.length ? -layouts[0].angle - Math.PI / 2 : 0,
+      pos: spawn.pos.clone(),
+      yaw: spawn.yaw,
       pitch: 0,
       bob: 0,
     };
@@ -440,7 +566,7 @@ export function MuseumGallery({
       // Only a real overlay ABOVE the museum (catalogue book / PIN dialog)
       // pauses movement — NOT the gallery popup itself, which is also a
       // role="dialog" wrapper around the whole museum.
-      if (document.querySelector("[data-guard-dialog], [data-gallery-catalog]")) { keys.clear(); return; }
+      if (document.querySelector("[data-guard-dialog], [data-gallery-catalog], [data-museum-intro]")) { keys.clear(); return; }
       const k = e.key.toLowerCase();
       keys.add(k);
       if (k === "tab") {
@@ -503,11 +629,11 @@ export function MuseumGallery({
     let focusedIdx = -1;
     function pickArtwork(): number {
       const fwd = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-      let best = -1, bestScore = 0.86;
+      let best = -1, bestScore = 0.8;
       artworks.forEach((a, i) => {
         const to = new THREE.Vector3().subVectors(a.pos, player.pos).setY(0);
         const dist = to.length();
-        if (dist > 4.4) return;
+        if (dist > VIEW_DIST + 2.6) return;
         to.normalize();
         const dot = to.dot(fwd);
         if (dot > bestScore) { bestScore = dot; best = i; }
@@ -544,6 +670,16 @@ export function MuseumGallery({
       autoGoto.then = () => openCatalog(a.project, def.label);
     }
     (window as unknown as { __museumInteract?: () => void }).__museumInteract = interact;
+    (window as unknown as { __museumTeleport?: (wingId: string) => boolean }).__museumTeleport = (wingId: string) => {
+      const l = layouts.find((w) => w.def.id === wingId);
+      if (!l) return false;
+      const t = spawnAt(l);
+      player.pos.copy(t.pos);
+      player.yaw = t.yaw;
+      player.pitch = 0;
+      autoGoto.active = false;
+      return true;
+    };
     (window as unknown as { __museumDebug?: () => unknown }).__museumDebug = () => ({
       pos: [player.pos.x, player.pos.z], yaw: player.yaw,
       keys: [...keys], auto: autoGoto.active,
@@ -569,6 +705,7 @@ export function MuseumGallery({
         while (dy > Math.PI) dy -= 2 * Math.PI;
         while (dy < -Math.PI) dy += 2 * Math.PI;
         player.yaw += dy * Math.min(1, dt * 5);
+        player.bob += dt * 7.5; // walking bob while gliding to a piece
         if (Math.abs(dy) < 0.03 && Math.hypot(autoGoto.pos.x - player.pos.x, autoGoto.pos.z - player.pos.z) < 0.08) {
           autoGoto.active = false;
           autoGoto.then?.();
@@ -631,6 +768,16 @@ export function MuseumGallery({
         }
       }
 
+      // dust motes: slow rise + sway, wrap back down
+      const dp = dustGeo.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < DUST; i++) {
+        let y = dp.getY(i) + dt * 0.05;
+        if (y > 3.2) y = 0.4;
+        dp.setY(i, y);
+        dp.setX(i, dp.getX(i) + Math.sin(clock.elapsedTime * 0.6 + dustSeed[i]) * dt * 0.02);
+      }
+      dp.needsUpdate = true;
+
       renderer.render(scene, camera);
     };
 
@@ -673,6 +820,7 @@ export function MuseumGallery({
       delete (window as unknown as { __museumJoy?: unknown }).__museumJoy;
       delete (window as unknown as { __museumInteract?: unknown }).__museumInteract;
       delete (window as unknown as { __museumDebug?: unknown }).__museumDebug;
+      delete (window as unknown as { __museumTeleport?: unknown }).__museumTeleport;
       scene.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
         if (mesh.geometry && mesh.geometry !== boxGeo && mesh.geometry !== planeGeo) mesh.geometry.dispose();
@@ -684,7 +832,7 @@ export function MuseumGallery({
     };
     // Rebuild only when the wing composition changes (titles/locks), not on
     // every store tick — interactRef keeps the callbacks fresh.
-  }, [wingsSignature]);
+  }, [wingsSignature, spawnWingId]);
 
   /* ---------------- joystick (touch) ---------------- */
   const joystickRef = useRef<HTMLDivElement>(null);
@@ -819,6 +967,87 @@ export function MuseumGallery({
               ? "کلیک = قفل موس و راه رفتن · WASD = حرکت · Tab = روبروی اثر · Enter = کاتالوگ"
               : "click = lock & walk · WASD · Tab face artwork · Enter catalogue"}
           </p>
+        </div>
+      )}
+
+      {/* wing guide — jump to another section's corridor */}
+      {wings.length > 1 && (
+        <div className="absolute end-4 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">
+          {wings.map((w) => {
+            const active = w.id === spawnWingId;
+            return (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => {
+                  if (w.locked) { onRequestUnlock(`gallery:${w.id}`, w.label); return; }
+                  setFade(true);
+                  window.setTimeout(() => {
+                    (window as unknown as { __museumTeleport?: (id: string) => boolean }).__museumTeleport?.(w.id);
+                    setFade(false);
+                    setToast(fa ? `ورود به ${w.label}` : `Entering ${w.label}`);
+                    window.setTimeout(() => setToast(null), 2200);
+                  }, 300);
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold backdrop-blur transition",
+                  active ? "border-white/40 bg-white/15 text-white" : "border-white/15 bg-black/45 text-white/70 hover:bg-black/65"
+                )}
+              >
+                <span className="size-2 rounded-full" style={{ background: w.locked ? "#e8c46a" : w.color }} />
+                <span className="max-w-20 truncate">{w.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* section-switch toast */}
+      {toast && (
+        <div className="pointer-events-none absolute left-1/2 top-14 z-40 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-5 py-2 text-sm font-bold text-white backdrop-blur">
+          {toast}
+        </div>
+      )}
+
+      {/* teleport fade */}
+      <div aria-hidden className={cn("pointer-events-none absolute inset-0 z-40 bg-black transition-opacity duration-300", fade ? "opacity-100" : "opacity-0")} />
+
+      {/* entrance guide */}
+      {intro && (
+        <div data-museum-intro className="absolute inset-0 z-50 grid place-items-center bg-black/80 p-6 backdrop-blur-md" onClick={() => setIntro(false)}>
+          <div className="max-w-lg rounded-3xl border border-white/15 bg-[#141020]/95 p-8 text-center shadow-2xl">
+            <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-white/50">
+              {fa ? "بازدید مجازی" : "virtual tour"}
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-white">
+              {fa ? "به موزه سه‌بعدی خوش آمدید" : "Welcome to the 3D museum"}
+            </h2>
+            <p className="mt-3 text-xs leading-6 text-white/70">
+              {fa
+                ? "مثل یک گالری واقعی قدم بزنید؛ روبه‌روی هر اثر بایستید و کاتالوگش را ورق بزنید."
+                : "Walk like a real gallery; stand in front of each piece and flip through its catalogue."}
+            </p>
+            <div className="mt-5 grid gap-2 text-start text-[11px] text-white/75">
+              {(typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) ? (
+                <>
+                  <p>🕹 {fa ? "دسته پایین صفحه = راه رفتن" : "Joystick (bottom) = walk"}</p>
+                  <p>👆 {fa ? "کشیدن صفحه = چرخش نگاه" : "Drag = look around"}</p>
+                  <p>👉 {fa ? "لمس اثر = نزدیک شدن و باز شدن کاتالوگ" : "Tap an artwork = walk in & open its catalogue"}</p>
+                  <p>🧭 {fa ? "راهنمای کنار صفحه = پرش به بخش‌های دیگر" : "Side guide = jump between wings"}</p>
+                </>
+              ) : (
+                <>
+                  <p>🖱️ {fa ? "کلیک = قفل موس و نگاه · WASD = راه رفتن" : "Click = mouse-look lock · WASD = walk"}</p>
+                  <p>⌨️ {fa ? "Tab = روبروی اثر بعدی · Enter = کاتالوگ" : "Tab = face next piece · Enter = catalogue"}</p>
+                  <p>📖 {fa ? "در کاتالوگ، صفحه را با موس بکشید و ورق بزنید" : "In the catalogue, drag the page to flip it"}</p>
+                  <p>🧭 {fa ? "راهنمای کنار صفحه = پرش به بخش‌های دیگر" : "Side guide = jump between wings"}</p>
+                </>
+              )}
+            </div>
+            <button type="button" className="mt-6 rounded-full bg-white px-8 py-3 text-sm font-black text-black transition hover:bg-white/85">
+              {fa ? "شروع بازدید" : "Start the tour"}
+            </button>
+          </div>
         </div>
       )}
 

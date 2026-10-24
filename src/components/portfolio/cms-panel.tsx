@@ -2909,6 +2909,7 @@ function PortfolioGalleryFields({ value, onChange, lang }: { value: SiteContent[
           { key: "tags", label: lang === "fa" ? "برچسب‌ها" : "Tags", type: "stringlist" },
           { key: "process", label: lang === "fa" ? "روند پروژه (مرحله‌ها)" : "Project process (milestones)", type: "objectlist", objectFields: [{ key: "title", label: lang === "fa" ? "عنوان مرحله" : "Milestone", type: "text" }, { key: "date", label: lang === "fa" ? "تاریخ" : "Date", type: "text" }, { key: "description", label: lang === "fa" ? "توضیح" : "Description", type: "text" }] },
           { key: "videos", label: lang === "fa" ? "ویدیوها (mp4/webm + پوستر اختیاری)" : "Videos (mp4/webm + optional poster)", type: "objectlist", objectFields: [{ key: "url", label: "URL", type: "text" }, { key: "poster", label: lang === "fa" ? "پوستر" : "Poster", type: "text" }, { key: "label", label: lang === "fa" ? "عنوان" : "Label", type: "text" }] },
+          { key: "featured", label: lang === "fa" ? "تصویر شاخص (URL — از تصاویر پروژه یا جداگانه)" : "Featured image (URL — from the project images or separate)", type: "text" },
         ]}
         makeEmpty={() => ({ title: "", meta: "", category: "", color: "#169cff", year: "", client: "", role: "", description: "", specs: [{ key: "", value: "" }], images: ["#169cff"], link: "", links: [{ label: "GitHub", url: "", kind: "github" }], location: "", dates: "", status: "completed", tags: [], process: [], videos: [] })}
       />

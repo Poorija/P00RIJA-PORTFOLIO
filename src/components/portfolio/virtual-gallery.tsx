@@ -180,6 +180,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
           {layout === "hall" && (
             <MuseumGallery
               lang={lang}
+              spawnWingId={sectionId}
               onOpenCatalog={(project, wingLabel) => {
                 const idx = projects.indexOf(project);
                 setCatalogIdx(idx >= 0 ? idx : projects.findIndex((p) => p.title === project.title));
