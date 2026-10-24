@@ -292,7 +292,9 @@ export function MuseumGallery({
 
     /* ---- walkable areas for collision ---- */
     type Area = { kind: "circle"; r: number } | { kind: "rect"; cx: number; cz: number; hw: number; hl: number; angle: number; cos: number; sin: number };
-  const areas: Area[] = [{ kind: "circle", r: HUB_R - 0.45 }];
+  // Hub walkable circle is SMALLER than the ring and stays inside the
+  // corridor walls at every gate approach (see rect start below).
+  const areas: Area[] = [{ kind: "circle", r: 4.6 }];
 
     /* ---- hub ---- */
     const hubFloor = new THREE.Mesh(new THREE.CircleGeometry(HUB_R, 48), floorMat);
@@ -374,7 +376,14 @@ export function MuseumGallery({
 
       // walkable rect (corridor)
       const cx = dir.x * (HUB_R + length / 2 - 2), cz = dir.z * (HUB_R + length / 2 - 2);
-      areas.push({ kind: "rect", cx, cz, hw: WING_W / 2 - 0.8, hl: length / 2 - 0.4, angle: layout.angle, cos: Math.cos(layout.angle), sin: Math.sin(layout.angle) });
+      // Rect starts 2.2 from the hub CENTER (well inside the hub circle)
+      // so hub→corridor walking is seamless, and stops 0.5 before the end
+      // wall. Half-width keeps the visitor 0.55 inside each wall.
+      const rStart = 2.2;
+      const rEnd = HUB_R + length - 2.5;
+      const rcx = dir.x * ((rStart + rEnd) / 2);
+      const rcz = dir.z * ((rStart + rEnd) / 2);
+      areas.push({ kind: "rect", cx: rcx, cz: rcz, hw: WING_W / 2 - 0.55, hl: (rEnd - rStart) / 2, angle: layout.angle, cos: Math.cos(layout.angle), sin: Math.sin(layout.angle) });
 
       // artworks
       for (const spot of layout.artworks) {
@@ -474,7 +483,7 @@ export function MuseumGallery({
     for (const layout of layouts) {
       const perp = { x: -layout.dir.z, z: layout.dir.x };
       const color = new THREE.Color(layout.def.color);
-      const lintelMat = track(new THREE.MeshLambertMaterial({ color }));
+      const lintelMat = track(new THREE.MeshBasicMaterial({ color })); // self-lit: readable from anywhere in the hub
       const px = layout.dir.x * (HUB_R - 0.1);
       const pz = layout.dir.z * (HUB_R - 0.1);
       for (const side of [-1, 1] as const) {
@@ -506,11 +515,17 @@ export function MuseumGallery({
       sign.position.set(layout.dir.x * (HUB_R - 0.9), 4.35, layout.dir.z * (HUB_R - 0.9));
       sign.rotation.y = Math.atan2(-layout.dir.x, -layout.dir.z);
       scene.add(sign);
-      // threshold glow
-      const th = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })));
-      th.scale.set(5.5, 2.2, 1);
-      th.position.set(layout.dir.x * (HUB_R - 0.8), 0.35, layout.dir.z * (HUB_R - 0.8));
+      // threshold glow + a bright floor BAR across the gate opening so the
+      // entrance reads as a doorway from anywhere in the hub
+      const th = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })));
+      th.scale.set(6.5, 2.6, 1);
+      th.position.set(layout.dir.x * (HUB_R - 0.8), 0.4, layout.dir.z * (HUB_R - 0.8));
       scene.add(th);
+      const bar = new THREE.Mesh(boxGeo, track(new THREE.MeshBasicMaterial({ color })));
+      bar.scale.set(WING_W - 0.1, 0.05, 0.34);
+      bar.position.set(layout.dir.x * (HUB_R - 0.02), 0.03, layout.dir.z * (HUB_R - 0.02));
+      bar.rotation.y = -layout.angle;
+      scene.add(bar);
     }
 
     /* ---------------- the intersection desk with the RÉSUMÉ BOOK ------ */
@@ -731,6 +746,14 @@ export function MuseumGallery({
       if (document.pointerLockElement !== canvas) { requestLock(); return; }
       interact();
     });
+    // When the catalogue book or a PIN dialog opens, RELEASE the mouse so
+    // the visitor can flip pages / type. Re-lock by clicking the canvas.
+    const overlayWatcher = window.setInterval(() => {
+      if (document.querySelector("[data-gallery-catalog], [data-guard-dialog]")) {
+        if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+        keys.clear();
+      }
+    }, 250);
 
     /* touch look + tap (on the canvas; the joystick stops propagation) */
     let tapInfo = { x: 0, y: 0, t: 0, moved: false };
@@ -975,6 +998,7 @@ export function MuseumGallery({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       document.removeEventListener("pointerlockchange", onLockChange);
+      window.clearInterval(overlayWatcher);
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("visibilitychange", onVisible);
       canvas.removeEventListener("webglcontextlost", onContextLost as EventListener);
