@@ -271,8 +271,10 @@ export function MuseumGallery({
     floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
     floorTex.repeat.set(40, 40);
     const floorMat = track(new THREE.MeshLambertMaterial({ map: floorTex }));
-    const wallMat = track(new THREE.MeshLambertMaterial({ color: 0x201c2e }));
-    const ceilMat = track(new THREE.MeshLambertMaterial({ color: 0x17141f }));
+    // DoubleSide on room surfaces + artworks: nothing ever "disappears"
+    // when viewed from behind (robust against any camera/position edge case).
+    const wallMat = track(new THREE.MeshLambertMaterial({ color: 0x4a4263, side: THREE.DoubleSide }));
+    const ceilMat = track(new THREE.MeshLambertMaterial({ color: 0x2b2540, side: THREE.DoubleSide }));
     const frameMat = track(new THREE.MeshLambertMaterial({ color: 0x0d0b12 }));
     const glowMat = track(new THREE.MeshBasicMaterial({ color: 0xfff3d0, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
 
@@ -341,7 +343,12 @@ export function MuseumGallery({
       corridorCeil.rotation.x = Math.PI / 2;
       scene.add(corridorCeil);
 
-      // walls
+      // walls — CRITICAL orientation fix: each wall plane must FACE the
+      // corridor interior. The old formula (-angle ± π/2) pointed both walls
+      // ALONG the corridor, so from inside you saw a black void (backfaces
+      // are culled) and artworks appeared to float in nothing.
+      // Inward normal for side: -side * perp = (side*sin a, -side*cos a)
+      // → rotation.y = atan2(side*sin a, -side*cos a).
       for (const side of [-1, 1] as const) {
         const wall = new THREE.Mesh(planeGeo, wallMat);
         wall.scale.set(length, 3.4, 1);
@@ -350,7 +357,7 @@ export function MuseumGallery({
           1.7,
           dir.z * (HUB_R + length / 2 - 2) + perp.z * side * (WING_W / 2)
         );
-        wall.rotation.y = -layout.angle + (side === -1 ? Math.PI / 2 : -Math.PI / 2);
+        wall.rotation.y = Math.atan2(side * Math.sin(layout.angle), -side * Math.cos(layout.angle));
         scene.add(wall);
       }
       // end wall with the wing title
@@ -358,10 +365,11 @@ export function MuseumGallery({
         [{ text: def.label, size: 44, bold: true }, { text: fa ? `${def.projects.length} اثر` : `${def.projects.length} works`, size: 24, color: "#b9b2d0" }],
         1024, 512, def.color
       ));
-      const endWall = new THREE.Mesh(planeGeo, track(new THREE.MeshBasicMaterial({ map: titleTex })));
+      const endWall = new THREE.Mesh(planeGeo, track(new THREE.MeshBasicMaterial({ map: titleTex, side: THREE.DoubleSide })));
       endWall.scale.set(WING_W, 2.8, 1);
       endWall.position.set(dir.x * (HUB_R + length - 2), 1.7, dir.z * (HUB_R + length - 2));
-      endWall.rotation.y = -layout.angle + Math.PI;
+      // face back toward the hub: normal = -dir
+      endWall.rotation.y = Math.atan2(-dir.x, -dir.z);
       scene.add(endWall);
 
       // walkable rect (corridor)
@@ -393,14 +401,14 @@ export function MuseumGallery({
         frame.position.z = -0.012;
         group.add(frame);
 
-        const artMat = track(new THREE.MeshBasicMaterial({ map: track(placeholderTexture(project.color || def.color)) }));
+        const artMat = track(new THREE.MeshBasicMaterial({ map: track(placeholderTexture(project.color || def.color)), side: THREE.DoubleSide }));
         const art = new THREE.Mesh(planeGeo, artMat);
         art.scale.set(w, h, 1);
         group.add(art);
 
         if (project.locked) {
           const lockTex = track(makeTextTexture([{ text: project.title || (fa ? "اثر محافظت‌شده" : "Protected"), size: 40, bold: true }, { text: fa ? "قفل با رمز" : "password-protected", size: 24, color: "#e8c46a" }], 512, 384, def.color));
-          art.material = track(new THREE.MeshBasicMaterial({ map: lockTex }));
+          art.material = track(new THREE.MeshBasicMaterial({ map: lockTex, side: THREE.DoubleSide }));
         } else {
           // Featured image > video poster > first image; with none, the wall
           // shows a typographic plate (project title + category).
@@ -493,10 +501,10 @@ export function MuseumGallery({
         ],
         1024, 360, layout.def.color
       ));
-      const sign = new THREE.Mesh(planeGeo, track(new THREE.MeshBasicMaterial({ map: signTex, transparent: true })));
+      const sign = new THREE.Mesh(planeGeo, track(new THREE.MeshBasicMaterial({ map: signTex, transparent: true, side: THREE.DoubleSide })));
       sign.scale.set(4.4, 1.55, 1);
       sign.position.set(layout.dir.x * (HUB_R - 0.9), 4.35, layout.dir.z * (HUB_R - 0.9));
-      sign.rotation.y = -layout.angle + Math.PI;
+      sign.rotation.y = Math.atan2(-layout.dir.x, -layout.dir.z);
       scene.add(sign);
       // threshold glow
       const th = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })));
