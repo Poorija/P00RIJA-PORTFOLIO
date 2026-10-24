@@ -1,14 +1,23 @@
 "use client";
 
 /* ============================================================
- * GalleryCatalog v2 — the artwork catalogue BOOK, Apple-Books
- * style: nearly full-screen pages (20% padding), and the page
- * physically follows your finger/mouse — drag a page across the
- * spine to flip it; release past the middle and it settles with
- * the same easing, release early and it slides back. Taps on the
- * page halves flip forward/back; keyboard still works; RTL
- * mirrors everything. On small screens the book shows ONE page
- * per spread (like Books on iPhone) with the same drag physics.
+ * GalleryCatalog v3 — the artwork catalogue BOOK, Apple-Books
+ * style: near full-screen, and the page physically follows your
+ * finger/mouse in BOTH directions (next AND previous), with real
+ * book physics:
+ *
+ *   • leaf = one physical page: front = recto, back = verso
+ *   • NEXT: leaf starts on the right (rot 0) and rotates to the
+ *     left (rot 180); reveals the next spread beneath
+ *   • PREV: leaf starts on the left (rot 180) and rotates back to
+ *     the right (rot 0)
+ *   • drag drives `progress` 0..1 continuously; release past the
+ *     middle settles with easing, early release slides back
+ *   • tap on either half / arrow keys / buttons flip fully
+ *   • single-page mode on phones (same engine, width 100%)
+ *
+ * Static halves during a flip show the ARRIVING pages (like a real
+ * book: the page revealed under the lifting leaf).
  * ============================================================ */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,7 +32,6 @@ import { cn } from "@/lib/utils";
 type Page = {
   kind: "cover" | "overview" | "process" | "specs" | "image" | "videos" | "links";
   image?: string;
-  /** overview chunk text (long descriptions paginate) */
   text?: string;
   part?: string;
 };
@@ -32,7 +40,6 @@ function buildPages(p: ProjectArtwork): Page[] {
   const pages: Page[] = [];
   const hero = p.featured || p.videos?.[0]?.poster || p.images?.find((i) => /^(https?:|\/|data:)/.test(i)) || "";
   pages.push({ kind: "cover", image: hero });
-  // long descriptions flow across as many overview pages as needed
   const desc = (p.description || p.meta || "").trim();
   const CHUNK = 620;
   const chunks: string[] = [];
@@ -56,6 +63,12 @@ function toFa(n: number): string {
   return String(n).replace(/\d/g, (x) => d[+x]);
 }
 
+interface Flip {
+  dir: 1 | -1;
+  from: number;
+  progress: number; // 0 = leaf on its origin side, 1 = fully landed
+}
+
 export function GalleryCatalog({
   project,
   lang,
@@ -67,99 +80,112 @@ export function GalleryCatalog({
 }) {
   const fa = lang === "fa";
   const pages = useMemo(() => buildPages(project), [project]);
-  const [spread, setSpread] = useState(0); // left-page index (spread) OR page index (single)
-  const [leaf, setLeaf] = useState<{ dir: 1 | -1; from: number; angle: number } | null>(null);
+  const [spread, setSpread] = useState(0);
+  const [flip, setFlip] = useState<Flip | null>(null);
   const [smooth, setSmooth] = useState(false);
   const [single, setSingle] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const bookRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ x0: number; dir: 1 | -1; from: number; w: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{ x0: number; dir: 1 | -1; from: number; half: number; moved: boolean } | null>(null);
+  const animRef = useRef<number | null>(null);
+  const flipRef = useRef<Flip | null>(null);
+  useEffect(() => { flipRef.current = flip; }, [flip]);
   const settleTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    if (settleTimer.current) window.clearTimeout(settleTimer.current);
+  }, []);
 
-  const maxSpread = Math.max(0, single ? pages.length - 1 : Math.ceil(pages.length / 2) - 1);
-  const canNext = spread < maxSpread;
-  const canPrev = spread > 0;
+  const maxSpread = single ? pages.length - 1 : Math.max(0, Math.ceil(pages.length / 2) - 1);
+  const canNext = spread < maxSpread && !flip;
+  const canPrev = spread > 0 && !flip;
   const accent = project.color || "var(--gfx-1)";
 
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setSingle(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
+  /* ---------------- commit ---------------- */
 
-  useEffect(() => () => { if (settleTimer.current) window.clearTimeout(settleTimer.current); }, []);
-
-  /* ---------------- flipping ---------------- */
-
-  type Leaf = { dir: 1 | -1; from: number; angle: number };
-
-  const settle = useCallback((l: Leaf, completed: boolean) => {
+  const commit = useCallback((f: Flip, completed: boolean) => {
     setSmooth(true);
-    // NEXT (dir=1): 0→180, completing commits from+1.
-    // PREV (dir=-1): 180→0, completing commits from-1.
-    setLeaf({ ...l, angle: completed ? (l.dir === 1 ? 180 : 0) : (l.dir === 1 ? 0 : 180) });
+    setFlip({ ...f, progress: completed ? 1 : 0 });
     if (settleTimer.current) window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => {
-      if (completed) setSpread(l.from + l.dir);
-      setLeaf(null);
+      if (completed) setSpread(f.from + f.dir);
+      setFlip(null);
       setSmooth(false);
-    }, 560);
+    }, 520);
   }, []);
 
-  const autoFlip = useCallback((dir: 1 | -1) => {
-    if (leaf) return;
-    if (dir === 1 && !canNext) return;
-    if (dir === -1 && !canPrev) return;
-    const next: Leaf = { dir, from: spread, angle: dir === 1 ? 0 : 180 };
-    setLeaf(next);
-    // two frames so the leaf mounts at its start angle before easing
-    requestAnimationFrame(() => requestAnimationFrame(() => settle(next, true)));
-  }, [leaf, canNext, canPrev, spread, settle]);
+  /** animated full flip (buttons / keyboard / tap) */
+  const animateFlip = useCallback((f: Flip) => {
+    const t0 = performance.now();
+    const D = 600;
+    const start = f.progress;
+    const target = f.dir === 1 ? 1 : 0;
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / D);
+      const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      setFlip({ ...f, progress: start + (target - start) * eased });
+      if (k < 1) {
+        animRef.current = requestAnimationFrame(tick);
+      } else {
+        commit(f, true);
+      }
+    };
+    animRef.current = requestAnimationFrame(tick);
+  }, [commit]);
 
-  /* drag a page (pointer) */
+  const autoFlip = useCallback((dir: 1 | -1) => {
+    if (flipRef.current) return;
+    if (dir === 1 && spread >= maxSpread) return;
+    if (dir === -1 && spread <= 0) return;
+    setSmooth(false);
+    animateFlip({ dir, from: spread, progress: dir === 1 ? 0 : 1 });
+  }, [spread, maxSpread, animateFlip]);
+
+  /* ---------------- pointer drag (both directions) ---------------- */
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if (leaf) return;
+    if (flipRef.current) return;
     const rect = bookRef.current?.getBoundingClientRect();
     if (!rect) return;
     const x = e.clientX - rect.left;
     const half = x < rect.width / 2;
-    // physical half → direction (RTL mirrored): in fa the "next" page sits on the LEFT
+    // LTR: right half = next, left half = prev. RTL mirrored.
     const dir: 1 | -1 = fa ? (half ? 1 : -1) : (half ? -1 : 1);
-    if (dir === 1 && !canNext) return;
-    if (dir === -1 && !canPrev) return;
-    dragRef.current = { x0: e.clientX, dir, from: spread, w: rect.width, moved: false };
+    if (dir === 1 && spread >= maxSpread) return;
+    if (dir === -1 && spread <= 0) return;
+    dragRef.current = { x0: e.clientX, dir, from: spread, half: rect.width / 2, moved: false };
     setSmooth(false);
-    setLeaf({ dir, from: spread, angle: dir === 1 ? 0 : 180 });
+    // mount the leaf at its resting pose for this direction
+    setFlip({ dir, from: spread, progress: dir === 1 ? 0 : 1 });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
-    if (!d) return;
+    const l = flipRef.current;
+    if (!d || !l || l.from !== d.from) return;
     const dx = e.clientX - d.x0;
     if (Math.abs(dx) > 4) d.moved = true;
-    // forward drag: LTR → leftward (negative dx); RTL → rightward (positive dx)
-    const raw = (fa ? dx : -dx) / d.w; // 0..1 for a full-width forward flip
-    const angle = Math.max(0, Math.min(180, raw * 180 * 1.35));
-    if (leaf) setLeaf({ ...leaf, angle: d.dir === 1 ? angle : 180 - angle });
+    // forward-drag sign in screen space: LTR next = leftward (−), RTL next = rightward (+)
+    const sign = (d.dir === 1) === !fa ? -1 : 1;
+    const progress = Math.max(0, Math.min(1, (dx * sign) / d.half + (d.dir === 1 ? 0 : 1)));
+    setFlip({ ...l, progress });
   };
 
   const onPointerUp = () => {
     const d = dragRef.current;
     dragRef.current = null;
-    if (!d) return;
-    if (!leaf) return;
+    const l = flipRef.current;
+    if (!d || !l) return;
     if (!d.moved) {
-      // tap → auto flip in the tapped direction
-      autoFlip(d.dir);
+      // tap → full animated flip in the tapped direction
+      animateFlip({ dir: d.dir, from: d.from, progress: d.dir === 1 ? 0 : 1 });
       return;
     }
-    // dir=1 completes past 82°; dir=-1 completes below 98° (its target is 0)
-    settle(leaf, leaf.dir === 1 ? leaf.angle > 82 : leaf.angle < 98);
+    const completed = d.dir === 1 ? l.progress > 0.45 : l.progress < 0.55;
+    commit(l, completed);
   };
 
-  /* keyboard */
+  /* ---------------- keyboard ---------------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -171,12 +197,12 @@ export function GalleryCatalog({
     return () => window.removeEventListener("keydown", onKey);
   }, [autoFlip, onClose, fa]);
 
-  /* ---------------- page rendering ---------------- */
+  /* ---------------- page renderers ---------------- */
 
   const paperBase = "relative flex h-full w-full flex-col overflow-hidden bg-[#f4f0e6] text-stone-900";
   const serif = "font-serif";
 
-  const renderPage = (page: Page | undefined, pageIndex: number) => {
+  const renderPage = (page: Page | undefined, pageIndex: number, clickable = true) => {
     if (!page) {
       return (
         <div className={cn(paperBase, "items-center justify-center bg-[#efe9dc]")}>
@@ -194,6 +220,7 @@ export function GalleryCatalog({
         return (
           <div className={cn(paperBase, "justify-end")}>
             {page.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={page.image} alt={project.title} className="absolute inset-0 h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0" style={{ background: `linear-gradient(150deg, ${accent}, oklch(0.3 0.06 290))` }} />
@@ -255,10 +282,10 @@ export function GalleryCatalog({
           <div className={cn(paperBase, "p-5 md:p-8")}>
             <h3 className={cn(serif, "text-base font-black md:text-xl")}>{fa ? "مشخصات" : "Specifications"}</h3>
             <div className="mt-4 space-y-2">
-              {project.specs!.map((s, i) => (
+              {project.specs!.map((sp, i) => (
                 <div key={i} className="flex items-baseline justify-between gap-3 border-b border-dashed border-stone-300 pb-1.5">
-                  <span className="text-[11px] text-stone-500 md:text-xs">{s.key}</span>
-                  <span className="text-[11px] font-semibold md:text-xs">{s.value}</span>
+                  <span className="text-[11px] text-stone-500 md:text-xs">{sp.key}</span>
+                  <span className="text-[11px] font-semibold md:text-xs">{sp.value}</span>
                 </div>
               ))}
             </div>
@@ -266,17 +293,24 @@ export function GalleryCatalog({
           </div>
         );
       case "image":
-        return (
+        return clickable ? (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); if (page.image) setLightbox(page.image); }}
             className={cn(paperBase, "block bg-stone-100")}
             aria-label={fa ? "باز کردن تصویر" : "open image"}
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={page.image} alt={project.title} className="absolute inset-0 h-full w-full object-contain p-3 md:p-6" />
             <span className="absolute bottom-2 end-3 rounded-full bg-black/45 px-2.5 py-1 font-mono text-[9px] text-white/80">⤢</span>
             {number}
           </button>
+        ) : (
+          <div className={cn(paperBase, "bg-stone-100")}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={page.image} alt={project.title} className="absolute inset-0 h-full w-full object-contain p-3 md:p-6" />
+            {number}
+          </div>
         );
       case "videos":
         return (
@@ -314,36 +348,50 @@ export function GalleryCatalog({
     }
   };
 
-  /* ---------------- book spread ---------------- */
+  /* ---------------- spread composition ---------------- */
 
-  const leftIdx = spread * 2;
-  const rightIdx = leftIdx + 1;
-  const singleIdx = spread;
-  const singleNextIdx = spread + 1;
+  // At rest: spread S shows pages [2S, 2S+1]. During a flip the static
+  // halves show the ARRIVING pages (what the real book reveals under the
+  // lifting leaf) and the leaf carries the moving pair:
+  //   NEXT: leaf front = 2S+1 (recto), back = 2S+2 (verso)
+  //   PREV: leaf front = 2S−1 (recto), back = 2S   (verso)
+  let leftIdx: number, rightIdx: number, leafFrontIdx = -1, leafBackIdx = -1;
+  if (flip) {
+    if (flip.dir === 1) {
+      leftIdx = flip.from * 2;          // current left (gets covered by the leaf)
+      rightIdx = flip.from * 2 + 3;     // revealed under the lifting leaf
+      leafFrontIdx = flip.from * 2 + 1;
+      leafBackIdx = flip.from * 2 + 2;
+    } else {
+      leftIdx = (flip.from - 1) * 2;    // revealed under the lifting leaf
+      rightIdx = flip.from * 2 + 1;     // current right (gets covered)
+      leafFrontIdx = flip.from * 2 - 1;
+      leafBackIdx = flip.from * 2;
+    }
+  } else {
+    leftIdx = spread * 2;
+    rightIdx = spread * 2 + 1;
+  }
 
-  // leaf faces (during a flip)
-  const flipFront = leaf
-    ? leaf.dir === 1
-      ? (single ? singleIdx : leaf.from * 2 + 1)
-      : (single ? singleIdx - 1 : leaf.from * 2 + 2)
-    : -1;
-  const flipBack = leaf
-    ? leaf.dir === 1
-      ? (single ? singleNextIdx : leaf.from * 2 + 2)
-      : (single ? singleIdx : leaf.from * 2 + 1)
-    : -1;
+  const safe = (i: number) => (i >= 0 && i < pages.length ? pages[i] : undefined);
 
-  // rotation sign: LTR pages turn −Y; RTL mirrored +Y. Angle 0→180 forward.
-  const rotSign = fa ? 1 : -1;
-  const leafStyle: React.CSSProperties = leaf
+  // rotation: NEXT progress 0→180 (right→left), PREV progress 1→0 mapped as
+  // (1−progress)·180 → 180→0 … unified: rot = progress·180 for next,
+  // (1−progress)·180 for prev. LTR renders rotateY(−rot), RTL +rot.
+  const rot = flip ? (flip.dir === 1 ? flip.progress : 1 - flip.progress) * 180 : 0;
+  const leafStyle: React.CSSProperties = flip
     ? {
         [fa ? "right" : "left"]: single ? 0 : "50%",
         width: single ? "100%" : "50%",
-        transformOrigin: single ? (fa ? "right center" : "left center") : (fa ? "right center" : "left center"),
-        transform: `rotateY(${rotSign * leaf.dir * leaf.angle}deg)`,
-        transition: smooth ? "transform 560ms cubic-bezier(0.3,0.1,0.2,1)" : "none",
+        transformOrigin: fa ? "right center" : "left center",
+        transform: `rotateY(${fa ? rot : -rot}deg)`,
+        transition: smooth ? "transform 520ms cubic-bezier(0.3,0.1,0.2,1)" : "none",
       }
     : {};
+
+  const pageCounter = single
+    ? `${fa ? toFa(spread + 1) : spread + 1} / ${fa ? toFa(pages.length) : pages.length}`
+    : `${fa ? toFa(leftIdx + 1) : leftIdx + 1}–${fa ? toFa(Math.min(pages.length, rightIdx + 1)) : Math.min(pages.length, rightIdx + 1)} / ${fa ? toFa(pages.length) : pages.length}`;
 
   return (
     <motion.div
@@ -359,21 +407,6 @@ export function GalleryCatalog({
     >
       <div className="absolute inset-0 bg-black/85" onClick={onClose} aria-hidden />
 
-        {/* fullscreen image viewer (click image page to open, click to close) */}
-        {lightbox && (
-          <div
-            className="fixed inset-0 z-[60] grid cursor-zoom-out place-items-center bg-black/95 p-4"
-            onClick={() => setLightbox(null)}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={lightbox} alt={project.title} className="max-h-full max-w-full object-contain" />
-            <p className="absolute bottom-5 font-mono text-[10px] uppercase tracking-widest text-white/50">
-              {fa ? "برای بستن کلیک کنید" : "click to close"}
-            </p>
-          </div>
-        )}
-
-
       <motion.div
         initial={{ scale: 0.94, rotateX: 10, y: 24, opacity: 0 }}
         animate={{ scale: 1, rotateX: 0, y: 0, opacity: 1 }}
@@ -382,7 +415,6 @@ export function GalleryCatalog({
         className="relative flex h-full w-full flex-col"
         style={{ perspective: 1800 }}
       >
-        {/* the book — near full-screen, ~20% padding handled by the outer p + max sizes */}
         <div
           ref={bookRef}
           onPointerDown={onPointerDown}
@@ -395,15 +427,19 @@ export function GalleryCatalog({
           {single ? (
             <>
               <div className="relative h-full w-full" style={{ boxShadow: "inset 0 0 60px -30px rgba(0,0,0,.35)" }}>
-                {renderPage(pages[singleIdx], singleIdx)}
+                {renderPage(
+                  flip ? safe(flip.dir === 1 ? flip.from + 1 : flip.from - 1) : safe(spread),
+                  flip ? (flip.dir === 1 ? flip.from + 1 : flip.from - 1) : spread,
+                  false
+                )}
               </div>
-              {leaf && (
-                <div aria-hidden className="absolute inset-y-0 z-20 backface-hidden" style={leafStyle}>
+              {flip && (
+                <div aria-hidden className="absolute inset-y-0 z-20" style={leafStyle}>
                   <div className="absolute inset-0 backface-hidden" style={{ boxShadow: "0 0 40px -10px rgba(0,0,0,.5)" }}>
-                    {renderPage(pages[flipFront], flipFront)}
+                    {renderPage(safe(flip.dir === 1 ? flip.from : flip.from - 1), flip.dir === 1 ? flip.from : flip.from - 1, false)}
                   </div>
-                  <div className="absolute inset-0 backface-hidden" style={{ transform: `rotateY(180deg)` }}>
-                    {renderPage(pages[flipBack], flipBack)}
+                  <div className="absolute inset-0 backface-hidden" style={{ transform: "rotateY(180deg)" }}>
+                    {renderPage(safe(flip.dir === 1 ? flip.from + 1 : flip.from), flip.dir === 1 ? flip.from + 1 : flip.from, false)}
                   </div>
                 </div>
               )}
@@ -411,21 +447,20 @@ export function GalleryCatalog({
           ) : (
             <>
               <div className="relative h-full w-1/2" style={{ boxShadow: "inset -22px 0 30px -24px rgba(0,0,0,.4)" }}>
-                {renderPage(pages[leftIdx], leftIdx)}
+                {renderPage(safe(leftIdx), leftIdx, !flip)}
               </div>
               <div className="relative h-full w-1/2" style={{ boxShadow: "inset 22px 0 30px -24px rgba(0,0,0,.4)" }}>
-                {renderPage(pages[rightIdx], rightIdx)}
+                {renderPage(safe(rightIdx), rightIdx, !flip)}
               </div>
-              {/* spine */}
               <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 z-30 w-12 -translate-x-1/2"
                 style={{ background: "linear-gradient(to right, transparent, rgba(0,0,0,.26) 45%, rgba(0,0,0,.26) 55%, transparent)" }} />
-              {leaf && (
-                <div aria-hidden className="absolute inset-y-0 z-20 w-1/2 backface-hidden" style={leafStyle}>
-                  <div className="absolute inset-0 backface-hidden" style={{ boxShadow: (leaf.dir === 1) === !fa ? "-16px 0 30px -14px rgba(0,0,0,.5)" : "16px 0 30px -14px rgba(0,0,0,.5)" }}>
-                    {renderPage(pages[flipFront], flipFront)}
+              {flip && (
+                <div aria-hidden className="absolute inset-y-0 z-20 w-1/2" style={leafStyle}>
+                  <div className="absolute inset-0 backface-hidden" style={{ boxShadow: "-16px 0 30px -14px rgba(0,0,0,.5)" }}>
+                    {renderPage(safe(leafFrontIdx), leafFrontIdx, false)}
                   </div>
                   <div className="absolute inset-0 backface-hidden" style={{ transform: "rotateY(180deg)" }}>
-                    {renderPage(pages[flipBack], flipBack)}
+                    {renderPage(safe(leafBackIdx), leafBackIdx, false)}
                   </div>
                 </div>
               )}
@@ -434,34 +469,39 @@ export function GalleryCatalog({
           <style>{`.backface-hidden > * { backface-visibility: hidden; } .backface-hidden { transform-style: preserve-3d; }`}</style>
         </div>
 
-
-        {/* controls */}
         <button type="button" onClick={onClose}
           className="absolute -top-2 end-2 grid size-10 place-items-center rounded-full border border-border bg-background text-foreground shadow-lg"
           aria-label={fa ? "بستن" : "Close"}>
           <X className="size-4" />
         </button>
         <div className="mt-3 flex shrink-0 items-center justify-center gap-3">
-          <button type="button" onClick={() => autoFlip(-1)} disabled={!canPrev || !!leaf}
+          <button type="button" onClick={() => autoFlip(-1)} disabled={!canPrev}
             className="grid size-11 place-items-center rounded-full border border-white/20 bg-black/60 text-white backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
             aria-label={fa ? "صفحه بعد" : "previous page"}>
             {fa ? <ChevronRight className="size-5" /> : <ChevronLeft className="size-5" />}
           </button>
-          <span className="rounded-full bg-black/55 px-4 py-1.5 font-mono text-xs text-white/85 backdrop-blur">
-            {single
-              ? `${fa ? toFa(singleIdx + 1) : singleIdx + 1} / ${fa ? toFa(pages.length) : pages.length}`
-              : `${fa ? toFa(leftIdx + 1) : leftIdx + 1}–${fa ? toFa(Math.min(pages.length, rightIdx + 1)) : Math.min(pages.length, rightIdx + 1)} / ${fa ? toFa(pages.length) : pages.length}`}
-          </span>
-          <button type="button" onClick={() => autoFlip(1)} disabled={!canNext || !!leaf}
+          <span className="rounded-full bg-black/55 px-4 py-1.5 font-mono text-xs text-white/85 backdrop-blur">{pageCounter}</span>
+          <button type="button" onClick={() => autoFlip(1)} disabled={!canNext}
             className="grid size-11 place-items-center rounded-full border border-white/20 bg-black/60 text-white backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
             aria-label={fa ? "صفحه قبل" : "next page"}>
             {fa ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
           </button>
         </div>
         <p className="mt-1 text-center font-mono text-[10px] uppercase tracking-widest text-white/40">
-          {fa ? "ورق را بکشید یا روی نیمه صفحه کلیک کنید · Esc بستن" : "drag the page or tap a half · esc close"}
+          {fa ? "ورق را بکشید (هر دو جهت) · Esc بستن" : "drag the page either way · esc close"}
         </p>
       </motion.div>
+
+      {/* fullscreen image viewer */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[160] grid cursor-zoom-out place-items-center bg-black/95 p-4" onClick={() => setLightbox(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightbox} alt={project.title} className="max-h-full max-w-full object-contain" />
+          <p className="absolute bottom-5 font-mono text-[10px] uppercase tracking-widest text-white/50">
+            {fa ? "برای بستن کلیک کنید" : "click to close"}
+          </p>
+        </div>
+      )}
     </motion.div>
   );
 }

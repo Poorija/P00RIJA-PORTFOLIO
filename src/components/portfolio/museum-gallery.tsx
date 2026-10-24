@@ -256,7 +256,7 @@ export function MuseumGallery({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#0b0913");
-    scene.fog = new THREE.Fog("#0b0913", 18, 55);
+    scene.fog = new THREE.Fog("#0b0913", 30, 90);
 
     const camera = new THREE.PerspectiveCamera(72, mount.clientWidth / mount.clientHeight, 0.1, 120);
 
@@ -273,7 +273,7 @@ export function MuseumGallery({
     const floorMat = track(new THREE.MeshLambertMaterial({ map: floorTex }));
     // DoubleSide on room surfaces + artworks: nothing ever "disappears"
     // when viewed from behind (robust against any camera/position edge case).
-    const wallMat = track(new THREE.MeshLambertMaterial({ color: 0x4a4263, side: THREE.DoubleSide }));
+    const wallMat = track(new THREE.MeshLambertMaterial({ color: 0x5c547e, side: THREE.DoubleSide }));
     const ceilMat = track(new THREE.MeshLambertMaterial({ color: 0x2b2540, side: THREE.DoubleSide }));
     const frameMat = track(new THREE.MeshLambertMaterial({ color: 0x0d0b12 }));
     const glowMat = track(new THREE.MeshBasicMaterial({ color: 0xfff3d0, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -609,6 +609,17 @@ export function MuseumGallery({
       book.add(bookGlow);
     }
 
+    // Warm point lights down each corridor so the walkways read as lit
+    // rooms from the hub (MeshLambert is per-vertex — cheap for 1 core).
+    for (const layout of layouts) {
+      const steps = Math.max(2, Math.ceil(layout.length / 7));
+      for (let i = 1; i <= steps; i++) {
+        const pl = new THREE.PointLight(0xffe2b8, 30, 11, 1.8);
+        pl.position.set(layout.dir.x * (HUB_R + 2 + (i - 0.5) * (layout.length / steps)), 2.9, layout.dir.z * (HUB_R + 2 + (i - 0.5) * (layout.length / steps)));
+        scene.add(pl);
+      }
+    }
+
     /* ---------------- ambience: light strips, baseboards, dust ------- */
     const stripMat = track(new THREE.MeshBasicMaterial({ color: 0xffe9b8 }));
     const boardMatByWing = new Map<string, THREE.MeshBasicMaterial>();
@@ -683,7 +694,7 @@ export function MuseumGallery({
     const keys = new Set<string>();
     const joy = { x: 0, y: 0 };
     const look = { id: -1 as number, x: 0, y: 0 };
-    const autoGoto = { active: false, pos: new THREE.Vector3(), yaw: 0, then: null as null | (() => void) };
+    const autoGoto = { active: false, pos: new THREE.Vector3(), yaw: 0, then: null as null | (() => void), deadline: 0 };
 
     const inArea = (x: number, z: number): boolean => {
       for (const a of areas) {
@@ -701,10 +712,10 @@ export function MuseumGallery({
 
     const movePlayer = (dx: number, dz: number) => {
       if (!inArea(player.pos.x, player.pos.z)) {
-        // outside every area (edge case): allow free movement so the
-        // visitor can never get permanently stuck.
-        player.pos.x += dx;
-        player.pos.z += dz;
+        // Edge case recovery: glide straight back to the hub center (never
+        // free-roam the void outside the building).
+        player.pos.x += (0 - player.pos.x) * 0.06;
+        player.pos.z += (0 - player.pos.z) * 0.06;
         return;
       }
       if (inArea(player.pos.x + dx, player.pos.z)) player.pos.x += dx;
@@ -806,6 +817,7 @@ export function MuseumGallery({
       autoGoto.active = true;
       autoGoto.pos.copy(a.spot);
       autoGoto.yaw = Math.atan2((a.pos.x - a.spot.x), (a.pos.z - a.spot.z)) + Math.PI;
+      autoGoto.deadline = Date.now() + 2600;
       autoGoto.then = null;
     }
     function interact() {
@@ -819,6 +831,7 @@ export function MuseumGallery({
         autoGoto.active = true;
         autoGoto.pos.copy(a.spot);
         autoGoto.yaw = Math.atan2((a.pos.x - a.spot.x), (a.pos.z - a.spot.z)) + Math.PI;
+        autoGoto.deadline = Date.now() + 2600;
         autoGoto.then = () => openResume?.();
         return;
       }
@@ -834,6 +847,7 @@ export function MuseumGallery({
       autoGoto.active = true;
       autoGoto.pos.copy(a.spot);
       autoGoto.yaw = Math.atan2((a.pos.x - a.spot.x), (a.pos.z - a.spot.z)) + Math.PI;
+      autoGoto.deadline = Date.now() + 2600;
       autoGoto.then = () => openCatalog(a.project, def.label);
     }
     (window as unknown as { __museumInteract?: () => void }).__museumInteract = interact;
@@ -882,16 +896,27 @@ export function MuseumGallery({
       if (contextLost) return; // wait for webglcontextrestored
       const dt = Math.min(0.05, clock.getDelta());
 
-      // auto-goto (focus / interact): ease position + yaw
+      // auto-goto (focus / interact): glide position + yaw, but CLAMPED to
+      // the walkable areas — the glide slides along walls instead of
+      // phasing through them (a straight lerp crossed whole corridors).
       if (autoGoto.active) {
-        player.pos.x += (autoGoto.pos.x - player.pos.x) * Math.min(1, dt * 4.5);
-        player.pos.z += (autoGoto.pos.z - player.pos.z) * Math.min(1, dt * 4.5);
+        const k = Math.min(1, dt * 4.5);
+        const nx = player.pos.x + (autoGoto.pos.x - player.pos.x) * k;
+        const nz = player.pos.z + (autoGoto.pos.z - player.pos.z) * k;
+        if (inArea(nx, player.pos.z)) player.pos.x = nx;
+        if (inArea(player.pos.x, nz)) player.pos.z = nz;
         let dy = autoGoto.yaw - player.yaw;
         while (dy > Math.PI) dy -= 2 * Math.PI;
         while (dy < -Math.PI) dy += 2 * Math.PI;
         player.yaw += dy * Math.min(1, dt * 5);
         player.bob += dt * 7.5; // walking bob while gliding to a piece
-        if (Math.abs(dy) < 0.03 && Math.hypot(autoGoto.pos.x - player.pos.x, autoGoto.pos.z - player.pos.z) < 0.08) {
+        // If walls make the direct path unreachable, don't slide forever:
+        // after the deadline, run the callback wherever the player stands.
+        if (Date.now() > autoGoto.deadline) {
+          autoGoto.active = false;
+          autoGoto.then?.();
+          autoGoto.then = null;
+        } else if (Math.abs(dy) < 0.03 && Math.hypot(autoGoto.pos.x - player.pos.x, autoGoto.pos.z - player.pos.z) < 0.08) {
           autoGoto.active = false;
           autoGoto.then?.();
           autoGoto.then = null;
