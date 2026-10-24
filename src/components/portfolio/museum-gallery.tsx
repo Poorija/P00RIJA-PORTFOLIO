@@ -171,6 +171,7 @@ export function MuseumGallery({
   lang,
   spawnWingId,
   onOpenCatalog,
+  onOpenResumeBook,
   onRequestUnlock,
 }: {
   lang: "fa" | "en";
@@ -178,6 +179,8 @@ export function MuseumGallery({
    *  that wing and stays there until they choose another via the guide. */
   spawnWingId?: string;
   onOpenCatalog: (project: ProjectArtwork, wingLabel: string) => void;
+  /** the desk book at the intersection — owner profile & résumé */
+  onOpenResumeBook?: () => void;
   onRequestUnlock: (target: string, label: string) => void;
 }) {
   const fa = lang === "fa";
@@ -232,10 +235,10 @@ export function MuseumGallery({
 
   /* interact callback identity for the imperative loop (kept fresh in an
    * effect — writing refs during render is forbidden) */
-  const interactRef = useRef({ onOpenCatalog, onRequestUnlock, wings: [] as WingDef[] });
+  const interactRef = useRef({ onOpenCatalog, onRequestUnlock, onOpenResumeBook, wings: [] as WingDef[] });
   useEffect(() => {
-    interactRef.current = { onOpenCatalog, onRequestUnlock, wings };
-  }, [onOpenCatalog, onRequestUnlock, wings]);
+    interactRef.current = { onOpenCatalog, onRequestUnlock, onOpenResumeBook, wings };
+  }, [onOpenCatalog, onRequestUnlock, onOpenResumeBook, wings]);
 
   /* ---------------- three.js lifecycle ---------------- */
   useEffect(() => {
@@ -253,12 +256,12 @@ export function MuseumGallery({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#0b0913");
-    scene.fog = new THREE.Fog("#0b0913", 14, 42);
+    scene.fog = new THREE.Fog("#0b0913", 18, 55);
 
     const camera = new THREE.PerspectiveCamera(72, mount.clientWidth / mount.clientHeight, 0.1, 120);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.05));
-    scene.add(new THREE.HemisphereLight(0xdcd6ff, 0x241f33, 0.55));
+    scene.add(new THREE.AmbientLight(0xffffff, 1.25));
+    scene.add(new THREE.HemisphereLight(0xe8e2ff, 0x2c2640, 0.75));
 
     /* ---- materials & geometry pools (for dispose) ---- */
     const disposables: Array<THREE.Texture | THREE.Material | THREE.BufferGeometry> = [];
@@ -293,7 +296,7 @@ export function MuseumGallery({
     const hubFloor = new THREE.Mesh(new THREE.CircleGeometry(HUB_R, 48), floorMat);
     hubFloor.rotation.x = -Math.PI / 2;
     scene.add(hubFloor);
-    addBox(HUB_R * 2, 0.1, HUB_R * 2, 0, 3.4, 0, ceilMat); // ceiling slab
+    addBox(HUB_R * 2, 0.1, HUB_R * 2, 0, 5.4, 0, ceilMat); // ceiling slab (tall hub for gate signs)
     // hub ring wall segments between wings
     const wingAngles = layouts.map((l) => l.angle);
 
@@ -304,6 +307,17 @@ export function MuseumGallery({
       spot: THREE.Vector3; // standing spot for focus mode
     }
     const artworks: ArtworkEntry[] = [];
+    // The desk book behaves like an artwork for focus/interact: standing at
+    // the hub and looking at the desk highlights it; Enter opens the
+    // profile/résumé catalogue.
+    const deskEntry: ArtworkEntry = {
+      wing: { id: "__desk__", label: fa ? "درباره من" : "About me", color: "#c9a24b", locked: false, projects: [] },
+      layout: layouts[0],
+      project: { title: fa ? "کتاب درباره من" : "My book", meta: "", category: "", color: "#c9a24b", year: "", client: "", role: "", description: "", specs: [], images: [], link: "" },
+      pos: new THREE.Vector3(0, 1.1, 0),
+      forward: new THREE.Vector3(0, 0, 1),
+      spot: new THREE.Vector3(0, EYE, 1.9),
+    };
 
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin("anonymous");
@@ -436,27 +450,140 @@ export function MuseumGallery({
       }
     }
 
+    artworks.push(deskEntry);
+
     // hub ring walls: fill the circle EXCEPT wing openings (cheap: full low ring)
     const ring = new THREE.Mesh(
-      track(new THREE.CylinderGeometry(HUB_R, HUB_R, 3.4, 64, 1, true)),
+      track(new THREE.CylinderGeometry(HUB_R, HUB_R, 5.6, 64, 1, true)),
       track(new THREE.MeshLambertMaterial({ color: 0x241f33, side: THREE.BackSide }))
     );
-    ring.position.y = 1.7;
+    ring.position.y = 2.8;
     scene.add(ring);
-    // reopen wing entrances by placing bright portal frames over the ring
+    // GATES: every wing entrance gets a proper doorway — two pillars, a
+    // lintel in the wing color, a BIG readable sign above (bilingual style:
+    // wing name large), and a soft light pool at the threshold.
+    const pillarMat = track(new THREE.MeshLambertMaterial({ color: 0x332b4d }));
     for (const layout of layouts) {
-      const portal = new THREE.Mesh(planeGeo, track(new THREE.MeshBasicMaterial({ color: new THREE.Color(def_color(layout)), transparent: true, opacity: 0.9 })));
-      function def_color(l: WingLayout) { return l.def.color; }
-      portal.scale.set(WING_W - 0.2, 3.0, 1);
-      portal.position.set(layout.dir.x * (HUB_R - 0.05), 1.6, layout.dir.z * (HUB_R - 0.05));
-      portal.rotation.y = -layout.angle + Math.PI;
-      scene.add(portal);
-      // portal label
-      const label = new THREE.Mesh(planeGeo, track(new THREE.MeshBasicMaterial({ map: track(makeTextTexture([{ text: layout.def.label, size: 40, bold: true }], 512, 160, layout.def.color)), transparent: true })));
-      label.scale.set(2.6, 0.8, 1);
-      label.position.set(layout.dir.x * (HUB_R - 0.5), 2.9, layout.dir.z * (HUB_R - 0.5));
-      label.rotation.y = -layout.angle + Math.PI;
-      scene.add(label);
+      const perp = { x: -layout.dir.z, z: layout.dir.x };
+      const color = new THREE.Color(layout.def.color);
+      const lintelMat = track(new THREE.MeshLambertMaterial({ color }));
+      const px = layout.dir.x * (HUB_R - 0.1);
+      const pz = layout.dir.z * (HUB_R - 0.1);
+      for (const side of [-1, 1] as const) {
+        const pillar = new THREE.Mesh(boxGeo, pillarMat);
+        pillar.scale.set(0.42, 3.6, 0.42);
+        pillar.position.set(px + perp.x * side * (WING_W / 2 - 0.05), 1.8, pz + perp.z * side * (WING_W / 2 - 0.05));
+        scene.add(pillar);
+        // colored cap on each pillar
+        const cap = new THREE.Mesh(boxGeo, lintelMat);
+        cap.scale.set(0.5, 0.22, 0.5);
+        cap.position.set(pillar.position.x, 3.62, pillar.position.z);
+        scene.add(cap);
+      }
+      const lintel = new THREE.Mesh(boxGeo, lintelMat);
+      lintel.scale.set(WING_W + 0.2, 0.34, 0.34);
+      lintel.position.set(px, 3.45, pz);
+      lintel.rotation.y = -layout.angle;
+      scene.add(lintel);
+      // BIG sign above the gate (name + direction hint)
+      const signTex = track(makeTextTexture(
+        [
+          { text: layout.def.label, size: 58, bold: true },
+          { text: fa ? "یک راهروی کامل از پروژه‌های همین بخش" : "a full corridor of this section's works", size: 22, color: "#cfc7e8" },
+        ],
+        1024, 360, layout.def.color
+      ));
+      const sign = new THREE.Mesh(planeGeo, track(new THREE.MeshBasicMaterial({ map: signTex, transparent: true })));
+      sign.scale.set(4.4, 1.55, 1);
+      sign.position.set(layout.dir.x * (HUB_R - 0.9), 4.35, layout.dir.z * (HUB_R - 0.9));
+      sign.rotation.y = -layout.angle + Math.PI;
+      scene.add(sign);
+      // threshold glow
+      const th = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })));
+      th.scale.set(5.5, 2.2, 1);
+      th.position.set(layout.dir.x * (HUB_R - 0.8), 0.35, layout.dir.z * (HUB_R - 0.8));
+      scene.add(th);
+    }
+
+    /* ---------------- the intersection desk with the RÉSUMÉ BOOK ------ */
+    // A reading desk at the hub center: wooden top + legs, a warm lamp,
+    // and a DETAILED open book (angled covers, layered page blocks with
+    // cream edge stripes, fanned inner pages, ribbon bookmark). Looking
+    // at it and pressing Enter/tapping opens the owner's profile book.
+    const deskGroup = new THREE.Group();
+    scene.add(deskGroup);
+    {
+      const woodMat = track(new THREE.MeshLambertMaterial({ color: 0x4a3524 }));
+      const woodDark = track(new THREE.MeshLambertMaterial({ color: 0x362718 }));
+      const top = new THREE.Mesh(boxGeo, woodMat);
+      top.scale.set(1.7, 0.09, 0.95);
+      top.position.y = 0.98;
+      deskGroup.add(top);
+      for (const [lx, lz] of [[-0.72, -0.36], [0.72, -0.36], [-0.72, 0.36], [0.72, 0.36]] as const) {
+        const leg = new THREE.Mesh(boxGeo, woodDark);
+        leg.scale.set(0.09, 0.98, 0.09);
+        leg.position.set(lx, 0.49, lz);
+        deskGroup.add(leg);
+      }
+      // desk lamp glow
+      const lampGlow = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color: 0xffd9a0, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })));
+      lampGlow.scale.set(1.6, 1.6, 1);
+      lampGlow.position.set(0.45, 1.35, -0.1);
+      deskGroup.add(lampGlow);
+
+      // ---- the open book ----
+      const book = new THREE.Group();
+      book.position.set(0, 1.06, 0.02);
+      book.rotation.y = -0.35;
+      deskGroup.add(book);
+      const coverMat = track(new THREE.MeshLambertMaterial({ color: 0x5b2430 })); // deep leather red
+      const pageMat = track(new THREE.MeshLambertMaterial({ color: 0xf3ecd8 }));
+      const edgeMat = track(new THREE.MeshLambertMaterial({ color: 0xd8cfb2 }));
+      const makeHalf = (side: -1 | 1) => {
+        const half = new THREE.Group();
+        // cover board (slightly larger, angled like a real open book)
+        const cover = new THREE.Mesh(boxGeo, coverMat);
+        cover.scale.set(0.48, 0.035, 0.64);
+        cover.rotation.z = side * 0.16;
+        half.add(cover);
+        // page block with visible cream edges (3 stacked slabs, tiny offsets)
+        for (let i = 0; i < 3; i++) {
+          const slab = new THREE.Mesh(boxGeo, i === 0 ? pageMat : edgeMat);
+          slab.scale.set(0.455 - i * 0.006, 0.016, 0.615 - i * 0.008);
+          slab.position.y = 0.026 + i * 0.0165;
+          slab.rotation.z = side * (0.16 + i * 0.012);
+          half.add(slab);
+        }
+        // fanned top pages
+        for (let i = 0; i < 3; i++) {
+          const page = new THREE.Mesh(planeGeo, pageMat);
+          page.scale.set(0.44 - i * 0.012, 0.6 - i * 0.02, 1);
+          page.rotation.x = -Math.PI / 2 + side * 0.02;
+          page.rotation.z = side * (0.05 + i * 0.018);
+          page.position.set(side * i * 0.012, 0.082 + i * 0.004, 0);
+          half.add(page);
+        }
+        half.position.x = side * 0.235;
+        return half;
+      };
+      book.add(makeHalf(-1));
+      book.add(makeHalf(1));
+      // spine wedge in the middle
+      const spine = new THREE.Mesh(boxGeo, coverMat);
+      spine.scale.set(0.06, 0.05, 0.65);
+      spine.position.y = 0.015;
+      book.add(spine);
+      // ribbon bookmark
+      const ribbon = new THREE.Mesh(boxGeo, track(new THREE.MeshLambertMaterial({ color: 0xb9962f })));
+      ribbon.scale.set(0.05, 0.012, 0.5);
+      ribbon.position.set(0.12, 0.1, -0.12);
+      ribbon.rotation.y = 0.3;
+      book.add(ribbon);
+      // soft light pool on the open pages
+      const bookGlow = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color: 0xfff2cd, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })));
+      bookGlow.scale.set(1.5, 1.2, 1);
+      bookGlow.position.set(0, 0.45, 0);
+      book.add(bookGlow);
     }
 
     /* ---------------- ambience: light strips, baseboards, dust ------- */
@@ -633,7 +760,8 @@ export function MuseumGallery({
       artworks.forEach((a, i) => {
         const to = new THREE.Vector3().subVectors(a.pos, player.pos).setY(0);
         const dist = to.length();
-        if (dist > VIEW_DIST + 2.6) return;
+        const maxDist = a.wing.id === "__desk__" ? VIEW_DIST + 3.4 : VIEW_DIST + 2.6;
+        if (dist > maxDist) return;
         to.normalize();
         const dot = to.dot(fwd);
         if (dot > bestScore) { bestScore = dot; best = i; }
@@ -653,8 +781,16 @@ export function MuseumGallery({
       const idx = pickArtwork();
       if (idx < 0) return;
       const a = artworks[idx];
-      const { onOpenCatalog: openCatalog, onRequestUnlock: requestUnlock } = interactRef.current;
+      const { onOpenCatalog: openCatalog, onRequestUnlock: requestUnlock, onOpenResumeBook: openResume } = interactRef.current;
       const def = a.wing;
+      if (def.id === "__desk__") {
+        // walk to the desk, face the open book, then open the profile book
+        autoGoto.active = true;
+        autoGoto.pos.copy(a.spot);
+        autoGoto.yaw = Math.atan2((a.pos.x - a.spot.x), (a.pos.z - a.spot.z)) + Math.PI;
+        autoGoto.then = () => openResume?.();
+        return;
+      }
       if (def.locked) {
         requestUnlock(`gallery:${def.id}`, def.label);
         return;
@@ -690,11 +826,29 @@ export function MuseumGallery({
 
     const clock = new THREE.Clock();
     let raf = 0;
+    let contextLost = false;
+    const onContextLost = (e: Event) => { e.preventDefault(); contextLost = true; };
+    const onContextRestored = () => {
+      contextLost = false;
+      resize();
+    };
+    canvas.addEventListener("webglcontextlost", onContextLost as EventListener);
+    canvas.addEventListener("webglcontextrestored", onContextRestored as EventListener);
+    // returning from device deep-sleep: drop the accumulated delta so the
+    // visitor doesn't teleport, and clear stuck keys.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        clock.getDelta();
+        keys.clear();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
     let hudTick = 0;
     const tmpForward = new THREE.Vector3();
 
     const animate = () => {
       raf = requestAnimationFrame(animate);
+      if (contextLost) return; // wait for webglcontextrestored
       const dt = Math.min(0.05, clock.getDelta());
 
       // auto-goto (focus / interact): ease position + yaw
@@ -752,11 +906,13 @@ export function MuseumGallery({
           else {
             const a = artworks[idx];
             setFocused(
-              a.wing.locked
-                ? { kind: "lockedWing", title: a.wing.label, sub: fa ? "این بال با رمز قفل است — برای ورود رمز را وارد کنید" : "this wing is password-protected", wingLabel: a.wing.label }
-                : a.project.locked
-                  ? { kind: "lockedProj", title: a.project.title, sub: fa ? "این اثر محافظت‌شده است" : "this artwork is protected", wingLabel: a.wing.label }
-                  : { kind: "project", title: a.project.title, sub: [a.project.category, a.project.year].filter(Boolean).join(" · "), wingLabel: a.wing.label }
+              a.wing.id === "__desk__"
+                ? { kind: "project" as const, title: fa ? "کتاب درباره من — رزومه و مشخصات" : "My book — profile & résumé", sub: fa ? "روی میز تقاطع" : "on the reading desk", wingLabel: a.wing.label }
+                : a.wing.locked
+                  ? { kind: "lockedWing" as const, title: a.wing.label, sub: fa ? "این بال با رمز قفل است — برای ورود رمز را وارد کنید" : "this wing is password-protected", wingLabel: a.wing.label }
+                  : a.project.locked
+                    ? { kind: "lockedProj" as const, title: a.project.title, sub: fa ? "این اثر محافظت‌شده است" : "this artwork is protected", wingLabel: a.wing.label }
+                    : { kind: "project" as const, title: a.project.title, sub: [a.project.category, a.project.year].filter(Boolean).join(" · "), wingLabel: a.wing.label }
             );
           }
         }
@@ -812,6 +968,9 @@ export function MuseumGallery({
       window.removeEventListener("keyup", onKeyUp);
       document.removeEventListener("pointerlockchange", onLockChange);
       document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("visibilitychange", onVisible);
+      canvas.removeEventListener("webglcontextlost", onContextLost as EventListener);
+      canvas.removeEventListener("webglcontextrestored", onContextRestored as EventListener);
       canvas.removeEventListener("click", requestLock as EventListener);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
@@ -918,7 +1077,9 @@ export function MuseumGallery({
           >
             {focused.kind === "project" ? <BookOpen className="size-4" /> : <Lock className="size-4" />}
             {focused.kind === "project"
-              ? (fa ? "کاتالوگ اثر" : "open catalogue")
+              ? (focused.wingLabel === (fa ? "درباره من" : "About me")
+                  ? (fa ? "باز کردن کتاب من" : "open my book")
+                  : (fa ? "کاتالوگ اثر" : "open catalogue"))
               : (fa ? "ورود با رمز" : "enter password")}
             <span className="font-mono text-[9px] opacity-60">Enter</span>
           </button>

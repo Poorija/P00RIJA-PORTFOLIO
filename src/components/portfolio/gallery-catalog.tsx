@@ -23,16 +23,25 @@ import { cn } from "@/lib/utils";
 type Page = {
   kind: "cover" | "overview" | "process" | "specs" | "image" | "videos" | "links";
   image?: string;
+  /** overview chunk text (long descriptions paginate) */
+  text?: string;
+  part?: string;
 };
 
 function buildPages(p: ProjectArtwork): Page[] {
   const pages: Page[] = [];
   const hero = p.featured || p.videos?.[0]?.poster || p.images?.find((i) => /^(https?:|\/|data:)/.test(i)) || "";
   pages.push({ kind: "cover", image: hero });
-  pages.push({ kind: "overview" });
+  // long descriptions flow across as many overview pages as needed
+  const desc = (p.description || p.meta || "").trim();
+  const CHUNK = 620;
+  const chunks: string[] = [];
+  for (let i = 0; i < desc.length && chunks.length < 4; i += CHUNK) chunks.push(desc.slice(i, i + CHUNK));
+  if (chunks.length === 0) chunks.push("");
+  chunks.forEach((_, i) => pages.push({ kind: "overview", text: chunks[i], part: chunks.length > 1 ? `${i + 1}/${chunks.length}` : "" }));
   if ((p.process?.length ?? 0) > 0) pages.push({ kind: "process" });
   if ((p.specs?.length ?? 0) > 0) pages.push({ kind: "specs" });
-  for (const img of (p.images ?? []).filter((i) => /^(https?:|\/|data:)/.test(i)).slice(0, 6)) {
+  for (const img of (p.images ?? []).filter((i) => /^(https?:|\/|data:)/.test(i)).slice(0, 12)) {
     pages.push({ kind: "image", image: img });
   }
   if ((p.videos?.length ?? 0) > 0) pages.push({ kind: "videos" });
@@ -62,6 +71,7 @@ export function GalleryCatalog({
   const [leaf, setLeaf] = useState<{ dir: 1 | -1; from: number; angle: number } | null>(null);
   const [smooth, setSmooth] = useState(false);
   const [single, setSingle] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const bookRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x0: number; dir: 1 | -1; from: number; w: number; moved: boolean } | null>(null);
   const settleTimer = useRef<number | null>(null);
@@ -85,12 +95,14 @@ export function GalleryCatalog({
 
   type Leaf = { dir: 1 | -1; from: number; angle: number };
 
-  const settle = useCallback((l: Leaf, toEnd: boolean) => {
+  const settle = useCallback((l: Leaf, completed: boolean) => {
     setSmooth(true);
-    setLeaf({ ...l, angle: toEnd ? 180 : 0 });
+    // NEXT (dir=1): 0→180, completing commits from+1.
+    // PREV (dir=-1): 180→0, completing commits from-1.
+    setLeaf({ ...l, angle: completed ? (l.dir === 1 ? 180 : 0) : (l.dir === 1 ? 0 : 180) });
     if (settleTimer.current) window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => {
-      if (toEnd) setSpread(l.from + 1);
+      if (completed) setSpread(l.from + l.dir);
       setLeaf(null);
       setSmooth(false);
     }, 560);
@@ -103,7 +115,7 @@ export function GalleryCatalog({
     const next: Leaf = { dir, from: spread, angle: dir === 1 ? 0 : 180 };
     setLeaf(next);
     // two frames so the leaf mounts at its start angle before easing
-    requestAnimationFrame(() => requestAnimationFrame(() => settle(next, dir === 1)));
+    requestAnimationFrame(() => requestAnimationFrame(() => settle(next, true)));
   }, [leaf, canNext, canPrev, spread, settle]);
 
   /* drag a page (pointer) */
@@ -143,7 +155,8 @@ export function GalleryCatalog({
       autoFlip(d.dir);
       return;
     }
-    settle(leaf, leaf.angle > 82);
+    // dir=1 completes past 82°; dir=-1 completes below 98° (its target is 0)
+    settle(leaf, leaf.dir === 1 ? leaf.angle > 82 : leaf.angle < 98);
   };
 
   /* keyboard */
@@ -200,7 +213,8 @@ export function GalleryCatalog({
         return (
           <div className={cn(paperBase, "p-5 md:p-8")}>
             <h3 className={cn(serif, "text-base font-black md:text-xl")}>{fa ? "درباره اثر" : "About the work"}</h3>
-            <p className="mt-3 text-justify text-xs leading-6 text-stone-700 md:text-sm md:leading-7">{project.description || project.meta}</p>
+            <p className="mt-3 text-justify text-xs leading-6 text-stone-700 md:text-sm md:leading-7">{page.text ?? project.description ?? project.meta}</p>
+            {page.part && <p className="mt-1 font-mono text-[9px] text-stone-400">{page.part}</p>}
             <div className="mt-4 space-y-2 text-[11px] text-stone-600 md:text-xs">
               {project.client && <p className="flex items-center gap-2"><Briefcase className="size-3.5" />{project.client}</p>}
               {project.role && <p className="flex items-center gap-2"><User className="size-3.5" />{project.role}</p>}
@@ -253,10 +267,16 @@ export function GalleryCatalog({
         );
       case "image":
         return (
-          <div className={cn(paperBase, "bg-stone-100")}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); if (page.image) setLightbox(page.image); }}
+            className={cn(paperBase, "block bg-stone-100")}
+            aria-label={fa ? "باز کردن تصویر" : "open image"}
+          >
             <img src={page.image} alt={project.title} className="absolute inset-0 h-full w-full object-contain p-3 md:p-6" />
+            <span className="absolute bottom-2 end-3 rounded-full bg-black/45 px-2.5 py-1 font-mono text-[9px] text-white/80">⤢</span>
             {number}
-          </div>
+          </button>
         );
       case "videos":
         return (
@@ -328,7 +348,7 @@ export function GalleryCatalog({
   return (
     <motion.div
       data-gallery-catalog
-      className="fixed inset-0 z-[150] flex items-center justify-center p-[3vw] sm:p-[5vw]"
+      className="fixed inset-0 z-[150] flex items-center justify-center p-3 md:p-[10%]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -338,6 +358,21 @@ export function GalleryCatalog({
       aria-label={fa ? `کاتالوگ ${project.title}` : `${project.title} catalogue`}
     >
       <div className="absolute inset-0 bg-black/85" onClick={onClose} aria-hidden />
+
+        {/* fullscreen image viewer (click image page to open, click to close) */}
+        {lightbox && (
+          <div
+            className="fixed inset-0 z-[60] grid cursor-zoom-out place-items-center bg-black/95 p-4"
+            onClick={() => setLightbox(null)}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={lightbox} alt={project.title} className="max-h-full max-w-full object-contain" />
+            <p className="absolute bottom-5 font-mono text-[10px] uppercase tracking-widest text-white/50">
+              {fa ? "برای بستن کلیک کنید" : "click to close"}
+            </p>
+          </div>
+        )}
+
 
       <motion.div
         initial={{ scale: 0.94, rotateX: 10, y: 24, opacity: 0 }}
@@ -398,6 +433,7 @@ export function GalleryCatalog({
           )}
           <style>{`.backface-hidden > * { backface-visibility: hidden; } .backface-hidden { transform-style: preserve-3d; }`}</style>
         </div>
+
 
         {/* controls */}
         <button type="button" onClick={onClose}

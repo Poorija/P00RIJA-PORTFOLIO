@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -57,10 +57,57 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   const t = useContent((s) => s.t);
   const lang = useContent((s) => s.lang);
   const guardSections = useContent((s) => s.guardSections);
+  const profileCfg = useContent((s) => s.content.profile);
+  const developerCfg = useContent((s) => s.content.developer);
+  const timelineCfg = useContent((s) => s.content.timeline);
+  const langSel = useContent((s) => s.lang);
+
+  /** The desk book at the museum hub: the owner's profile & résumé bound
+   *  into one catalogue (cover=avatar, about=bio, process=timeline,
+   *  specs=skills+facts, links=socials+email+résumé download). */
+  const resumeProject: ProjectArtwork = useMemo(() => {
+    const fa = langSel === "fa";
+    const timeline = (timelineCfg?.entries ?? []).slice(0, 8).map((e) => ({
+      title: `${e.title}${e.org ? ` — ${e.org}` : ""}`,
+      date: e.date,
+      description: e.description,
+    }));
+    const skills = (profileCfg?.skills ?? []).slice(0, 8).map((sk) => ({ key: sk.label, value: `${sk.level}%` }));
+    const facts = (profileCfg?.facts ?? []).slice(0, 8).map((f) => ({ key: f.key, value: f.value }));
+    const socials: { label: string; url: string; kind: "live" | "source" | "github" | "docs" | "other" }[] = [];
+    for (const so of profileCfg?.socials ?? []) {
+      if (so?.url) socials.push({ label: so.label || so.platform || "link", url: so.url, kind: "other" });
+    }
+    const email = profileCfg?.email || developerCfg?.email;
+    if (email) socials.push({ label: "Email", url: `mailto:${email}`, kind: "other" });
+    if (profileCfg?.resumeUrl) {
+      socials.push({ label: profileCfg.resumeLabel || (fa ? "دانلود رزومه" : "Download résumé"), url: profileCfg.resumeUrl, kind: "docs" });
+    }
+    return {
+      title: profileCfg?.name || developerCfg?.name || (fa ? "درباره من" : "About me"),
+      meta: profileCfg?.role || developerCfg?.role || "",
+      category: fa ? "پروفایل و رزومه" : "profile & résumé",
+      color: "#c9a24b",
+      year: profileCfg?.availability || "",
+      client: profileCfg?.location || "",
+      role: profileCfg?.tagline || "",
+      description: profileCfg?.bio || developerCfg?.description || "",
+      specs: [...facts, ...skills],
+      images: profileCfg?.avatar ? [profileCfg.avatar] : [],
+      link: "",
+      links: socials,
+      location: profileCfg?.location || "",
+      dates: "",
+      status: profileCfg?.availability || "",
+      tags: (timelineCfg?.entries ?? []).slice(0, 6).flatMap((e) => (e.tags ?? []).slice(0, 2)).slice(0, 8),
+      process: timeline,
+      videos: [],
+    };
+  }, [profileCfg, developerCfg, timelineCfg, langSel]);
   const [active, setActive] = useState<number | null>(null);
   const [current, setCurrent] = useState(0);
   const [lockDialogIdx, setLockDialogIdx] = useState<number | null>(null);
-  const [catalogIdx, setCatalogIdx] = useState<number | null>(null);
+  const [catalogProject, setCatalogProject] = useState<ProjectArtwork | null>(null);
   const [catalogLabel, setCatalogLabel] = useState("");
   const [lockReq, setLockReq] = useState<{ target: string; label: string } | null>(null);
 
@@ -75,7 +122,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
     }
     if (layout === "hall") {
       // In the 3D museum the artwork "detail" is its page-flip catalogue book.
-      setCatalogIdx(i);
+      setCatalogProject(projects[i]);
       setCatalogLabel(sectionId ?? "");
       return;
     }
@@ -182,10 +229,10 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
               lang={lang}
               spawnWingId={sectionId}
               onOpenCatalog={(project, wingLabel) => {
-                const idx = projects.indexOf(project);
-                setCatalogIdx(idx >= 0 ? idx : projects.findIndex((p) => p.title === project.title));
+                setCatalogProject(project);
                 setCatalogLabel(wingLabel);
               }}
+              onOpenResumeBook={() => { setCatalogProject(resumeProject); setCatalogLabel(lang === "fa" ? "درباره من" : "About me"); }}
               onRequestUnlock={(target, label) => setLockReq({ target, label })}
             />
           )}
@@ -298,11 +345,11 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
 
       {/* Artwork catalogue book (hall/museum mode) */}
       <AnimatePresence>
-        {catalogIdx !== null && projects[catalogIdx] && !projects[catalogIdx].locked && (
+        {catalogProject && !catalogProject.locked && (
           <GalleryCatalog
-            project={projects[catalogIdx]}
+            project={catalogProject}
             lang={lang}
-            onClose={() => setCatalogIdx(null)}
+            onClose={() => setCatalogProject(null)}
           />
         )}
       </AnimatePresence>
