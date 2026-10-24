@@ -34,6 +34,7 @@ type Page = {
   image?: string;
   text?: string;
   part?: string;
+  idx?: number; // chunk index for process/specs pages
 };
 
 function buildPages(p: ProjectArtwork): Page[] {
@@ -43,11 +44,19 @@ function buildPages(p: ProjectArtwork): Page[] {
   const desc = (p.description || p.meta || "").trim();
   const CHUNK = 620;
   const chunks: string[] = [];
-  for (let i = 0; i < desc.length && chunks.length < 4; i += CHUNK) chunks.push(desc.slice(i, i + CHUNK));
+  for (let i = 0; i < desc.length && chunks.length < 8; i += CHUNK) chunks.push(desc.slice(i, i + CHUNK));
   if (chunks.length === 0) chunks.push("");
   chunks.forEach((_, i) => pages.push({ kind: "overview", text: chunks[i], part: chunks.length > 1 ? `${i + 1}/${chunks.length}` : "" }));
-  if ((p.process?.length ?? 0) > 0) pages.push({ kind: "process" });
-  if ((p.specs?.length ?? 0) > 0) pages.push({ kind: "specs" });
+  // process & specs spill over multiple pages so NOTHING is dropped —
+  // the résumé book carries the whole About section.
+  const processEntries = (p.process ?? []).filter((m) => m?.title);
+  for (let i = 0; i < processEntries.length; i += 6) {
+    pages.push({ kind: "process", idx: i / 6, part: processEntries.length > 6 ? `${i / 6 + 1}/${Math.ceil(processEntries.length / 6)}` : "" });
+  }
+  const specEntries = p.specs ?? [];
+  for (let i = 0; i < specEntries.length; i += 12) {
+    pages.push({ kind: "specs", idx: i / 12, part: specEntries.length > 12 ? `${i / 12 + 1}/${Math.ceil(specEntries.length / 12)}` : "" });
+  }
   for (const img of (p.images ?? []).filter((i) => /^(https?:|\/|data:)/.test(i)).slice(0, 12)) {
     pages.push({ kind: "image", image: img });
   }
@@ -261,12 +270,14 @@ export function GalleryCatalog({
             {number}
           </div>
         );
-      case "process":
+      case "process": {
+        const chunk = page.idx ?? 0;
+        const entries = project.process!.filter((m) => m?.title).slice(chunk * 6, chunk * 6 + 6);
         return (
           <div className={cn(paperBase, "p-5 md:p-8")}>
             <h3 className={cn(serif, "text-base font-black md:text-xl")}>{fa ? "روند پروژه" : "Process"}</h3>
             <ol className="relative mt-4 space-y-3 border-s border-stone-300 ps-4 md:space-y-4">
-              {project.process!.filter((m) => m?.title).map((m, i) => (
+              {entries.map((m, i) => (
                 <li key={i} className="relative">
                   <span className="absolute -start-[22px] top-1.5 size-2.5 rounded-full" style={{ background: accent }} />
                   <p className="text-xs font-bold md:text-sm">{m.title}
@@ -279,12 +290,15 @@ export function GalleryCatalog({
             {number}
           </div>
         );
-      case "specs":
+      }
+      case "specs": {
+        const chunk = page.idx ?? 0;
+        const entries = project.specs!.slice(chunk * 12, chunk * 12 + 12);
         return (
           <div className={cn(paperBase, "p-5 md:p-8")}>
             <h3 className={cn(serif, "text-base font-black md:text-xl")}>{fa ? "مشخصات" : "Specifications"}</h3>
             <div className="mt-4 space-y-2">
-              {project.specs!.map((sp, i) => (
+              {entries.map((sp, i) => (
                 <div key={i} className="flex items-baseline justify-between gap-3 border-b border-dashed border-stone-300 pb-1.5">
                   <span className="text-[11px] text-stone-500 md:text-xs">{sp.key}</span>
                   <span className="text-[11px] font-semibold md:text-xs">{sp.value}</span>
@@ -294,6 +308,7 @@ export function GalleryCatalog({
             {number}
           </div>
         );
+      }
       case "image":
         return clickable ? (
           <button

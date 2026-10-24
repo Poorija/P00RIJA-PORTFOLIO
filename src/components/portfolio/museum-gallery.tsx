@@ -300,6 +300,8 @@ export function MuseumGallery({
     type Collider = { dir: { x: number; z: number }; perp: { x: number; z: number }; alongMin: number; alongMax: number; halfW: number; wallStart: number; wallPlane: number };
     const colliders: Collider[] = [];
     const HUB_WALK = HUB_R - 0.42; // ring wall at HUB_R, keep a body radius
+    // per-frame animation hooks (portals swirl, hologram spins, book bobs)
+    const animated: ((t: number, dt: number) => void)[] = [];
 
     /* ---- hub ---- */
     const hubFloor = new THREE.Mesh(new THREE.CircleGeometry(HUB_R, 48), floorMat);
@@ -323,7 +325,7 @@ export function MuseumGallery({
       wing: { id: "__desk__", label: fa ? "درباره من" : "About me", color: "#c9a24b", locked: false, projects: [] },
       layout: layouts[0],
       project: { title: fa ? "کتاب درباره من" : "My book", meta: "", category: "", color: "#c9a24b", year: "", client: "", role: "", description: "", specs: [], images: [], link: "" },
-      pos: new THREE.Vector3(0, 1.1, 0),
+      pos: new THREE.Vector3(0, 1.5, 0),
       forward: new THREE.Vector3(0, 0, 1),
       spot: new THREE.Vector3(0, EYE, 1.9),
     };
@@ -479,13 +481,31 @@ export function MuseumGallery({
 
     artworks.push(deskEntry);
 
-    // hub ring walls: fill the circle EXCEPT wing openings (cheap: full low ring)
-    const ring = new THREE.Mesh(
-      track(new THREE.CylinderGeometry(HUB_R, HUB_R, 5.6, 64, 1, true)),
-      track(new THREE.MeshLambertMaterial({ color: 0x241f33, side: THREE.BackSide }))
-    );
-    ring.position.y = 2.8;
-    scene.add(ring);
+    // hub ring walls: ARC SEGMENTS with REAL gate openings. A full cylinder
+    // here (old cheap version) put an opaque wall across every gate opening —
+    // from the hub each corridor read as a black wall and the portals were
+    // hidden behind it (BackSide culled from the corridor side, which made
+    // the bug one-sided and confusing).
+    const ringMat = track(new THREE.MeshLambertMaterial({ color: 0x241f33, side: THREE.DoubleSide }));
+    const gateHalfAngle = (WING_W / 2 + 0.7) / HUB_R; // gate opening half-angle at ring radius
+    {
+      // cylinder-θ convention: x = R·sinθ, z = R·cosθ → θ_wing = π/2 − angle
+      const thetas = layouts.map((l) => Math.PI / 2 - l.angle).sort((a, b) => a - b);
+      for (let i = 0; i < thetas.length; i++) {
+        const t1 = thetas[i], t2 = thetas[(i + 1) % thetas.length];
+        let gap = t2 - t1;
+        if (gap <= 0) gap += Math.PI * 2;
+        const start = t1 + gateHalfAngle;
+        const len = gap - 2 * gateHalfAngle;
+        if (len <= 0.03) continue; // wings too close — no wall segment fits
+        const seg = new THREE.Mesh(
+          track(new THREE.CylinderGeometry(HUB_R, HUB_R, 5.6, Math.max(8, Math.ceil(64 * (len / (Math.PI * 2)))), 1, true, start, len)),
+          ringMat
+        );
+        seg.position.y = 2.8;
+        scene.add(seg);
+      }
+    }
     // GATES: every wing entrance gets a proper doorway — two pillars, a
     // lintel in the wing color, a BIG readable sign above (bilingual style:
     // wing name large), and a soft light pool at the threshold.
@@ -541,50 +561,149 @@ export function MuseumGallery({
       bar.position.set(layout.dir.x * (HUB_R - 0.02), 0.03, layout.dir.z * (HUB_R - 0.02));
       bar.rotation.y = acrossRot;
       scene.add(bar);
+
+      /* ---- GLOWING ENERGY PORTAL filling the gate opening ----
+       * From the hub a corridor reads as a black rectangle (walls/floor are
+       * grazing-angle, the far end is fogged). A swirling FBM-noise portal
+       * plane fills the opening with animated wing-colored energy instead —
+       * the classic sci-fi recipe: polar swirl + layered fbm + rim glow
+       * (cf. tekblueprint.org vignette-portal / vortex ShaderMaterial demos). */
+      const portalVert = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+      const portalFrag = `
+        uniform float uTime; uniform vec3 uColor; varying vec2 vUv;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+        float noise(vec2 p){
+          vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                     mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+        float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
+        void main(){
+          vec2 p = vUv - 0.5;
+          float r = length(p) * 2.0;
+          float ang = atan(p.y, p.x);
+          float swirl = ang + uTime * 0.45 + (1.0 - r) * 2.6;
+          float n  = fbm(vec2(cos(swirl), sin(swirl)) * 2.2 + vec2(0.0, r * 5.0 - uTime * 0.9));
+          float n2 = fbm(vec2(cos(swirl * 1.7 + 1.3), sin(swirl * 1.7)) * 3.1 - vec2(0.0, r * 7.0 + uTime * 0.6));
+          float energy = n * 0.75 + n2 * 0.55;
+          float rim  = smoothstep(0.5, 1.0, r);
+          float core = smoothstep(1.0, 0.3, r);
+          float pulse = 0.9 + 0.1 * sin(uTime * 2.1);
+          float alpha = clamp(energy * (0.8 + rim * 0.85) * (0.3 + core * 0.7) + rim * 0.42, 0.0, 0.82) * pulse;
+          vec3 col = uColor * (0.6 + energy * 1.0) + vec3(1.0) * rim * 0.2;
+          gl_FragColor = vec4(col * alpha, alpha);
+        }`;
+      const portalMat = track(new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: Math.random() * 20 }, uColor: { value: new THREE.Color(layout.def.color) } },
+        vertexShader: portalVert,
+        fragmentShader: portalFrag,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }));
+      const portal = new THREE.Mesh(planeGeo, portalMat);
+      portal.scale.set(WING_W - 0.45, 3.15, 1);
+      portal.position.set(layout.dir.x * (HUB_R + 0.18), 1.62, layout.dir.z * (HUB_R + 0.18));
+      portal.rotation.y = Math.atan2(-layout.dir.x, -layout.dir.z); // face the hub (DoubleSide: visible from inside too)
+      scene.add(portal);
+      // portal frame light: colored spill onto the hub floor + corridor mouth
+      const portalLight = new THREE.PointLight(color, 16, 10, 1.8);
+      portalLight.position.set(layout.dir.x * (HUB_R + 1.4), 2.0, layout.dir.z * (HUB_R + 1.4));
+      scene.add(portalLight);
+      // three glow orbs orbiting the opening (visible motion around the frame)
+      const orbMat = track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const orbPhase = Math.random() * Math.PI * 2;
+      const orbs: THREE.Sprite[] = [];
+      for (let k = 0; k < 3; k++) {
+        const orb = new THREE.Sprite(orbMat);
+        orb.scale.set(0.5, 0.5, 1);
+        scene.add(orb);
+        orbs.push(orb);
+      }
+      const portalCenter = portal.position.clone();
+      const orbRX = (WING_W - 0.45) / 2 + 0.28, orbRY = 3.15 / 2 + 0.24;
+      const perpV = new THREE.Vector3(perp.x, 0, perp.z);
+      animated.push((t) => {
+        portalMat.uniforms.uTime.value = t;
+        for (let k = 0; k < orbs.length; k++) {
+          const a = t * 0.55 + orbPhase + (k * Math.PI * 2) / orbs.length;
+          orbs[k].position.set(
+            portalCenter.x + perpV.x * Math.cos(a) * orbRX,
+            1.62 + Math.sin(a) * orbRY,
+            portalCenter.z + perpV.z * Math.cos(a) * orbRX,
+          );
+        }
+      });
     }
 
-    /* ---------------- the intersection desk with the RÉSUMÉ BOOK ------ */
-    // A reading desk at the hub center: wooden top + legs, a warm lamp,
-    // and a DETAILED open book (angled covers, layered page blocks with
-    // cream edge stripes, fanned inner pages, ribbon bookmark). Looking
-    // at it and pressing Enter/tapping opens the owner's profile book.
+    /* ---------------- the intersection HOLO-PEDESTAL with the RÉSUMÉ BOOK */
+    // Sci-fi reading station at the hub center: a dark glass pedestal with
+    // glowing rings, the open résumé book LEVITATING above it (gentle bob),
+    // and a cyan light hologram rising over the book — volumetric cone,
+    // wireframe globe, counter-rotating orbit rings, floating sparks.
+    // Enter/tap still opens the owner's profile book.
     const deskGroup = new THREE.Group();
     scene.add(deskGroup);
     {
-      const woodMat = track(new THREE.MeshLambertMaterial({ color: 0x4a3524 }));
-      const woodDark = track(new THREE.MeshLambertMaterial({ color: 0x362718 }));
-      const top = new THREE.Mesh(boxGeo, woodMat);
-      top.scale.set(1.7, 0.09, 0.95);
-      top.position.y = 0.98;
-      deskGroup.add(top);
-      for (const [lx, lz] of [[-0.72, -0.36], [0.72, -0.36], [-0.72, 0.36], [0.72, 0.36]] as const) {
-        const leg = new THREE.Mesh(boxGeo, woodDark);
-        leg.scale.set(0.09, 0.98, 0.09);
-        leg.position.set(lx, 0.49, lz);
-        deskGroup.add(leg);
-      }
-      // desk lamp glow
-      const lampGlow = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color: 0xffd9a0, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })));
-      lampGlow.scale.set(1.6, 1.6, 1);
-      lampGlow.position.set(0.45, 1.35, -0.1);
-      deskGroup.add(lampGlow);
+      const HOLO = 0x67e8f9; // hologram cyan
+      // ---- pedestal ----
+      const pedMat = track(new THREE.MeshLambertMaterial({ color: 0x211c33 }));
+      const pedestal = new THREE.Mesh(boxGeo, pedMat);
+      pedestal.scale.set(1.5, 0.86, 1.1);
+      pedestal.position.y = 0.43;
+      deskGroup.add(pedestal);
+      const chamfer = new THREE.Mesh(boxGeo, track(new THREE.MeshLambertMaterial({ color: 0x2c2544 })));
+      chamfer.scale.set(1.62, 0.1, 1.2);
+      chamfer.position.y = 0.9;
+      deskGroup.add(chamfer);
+      // glowing rim rings (cyan + gold) on the chamfer and the floor
+      const ringFlat = track(new THREE.RingGeometry(0.42, 0.5, 48));
+      const rimMat = track(new THREE.MeshBasicMaterial({ color: HOLO, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      const rim = new THREE.Mesh(ringFlat, rimMat);
+      rim.rotation.x = -Math.PI / 2;
+      rim.position.y = 0.96;
+      rim.scale.set(1.55, 1.15, 1);
+      deskGroup.add(rim);
+      const goldRingMat = track(new THREE.MeshBasicMaterial({ color: 0xc9a24b, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      const floorRing1 = new THREE.Mesh(ringFlat, goldRingMat);
+      floorRing1.rotation.x = -Math.PI / 2;
+      floorRing1.position.y = 0.02;
+      floorRing1.scale.set(2.5, 2.5, 1);
+      deskGroup.add(floorRing1);
+      const floorRing2 = new THREE.Mesh(ringFlat, track(new THREE.MeshBasicMaterial({ color: HOLO, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })));
+      floorRing2.rotation.x = -Math.PI / 2;
+      floorRing2.position.y = 0.025;
+      floorRing2.scale.set(3.3, 3.3, 1);
+      deskGroup.add(floorRing2);
+      // hologram emitter puck on the pedestal
+      const emitter = new THREE.Mesh(boxGeo, track(new THREE.MeshBasicMaterial({ color: HOLO })));
+      emitter.scale.set(0.34, 0.05, 0.24);
+      emitter.position.set(0, 0.985, 0);
+      deskGroup.add(emitter);
 
-      // ---- the open book ----
+      // ---- the levitating open book ----
       const book = new THREE.Group();
-      book.position.set(0, 1.06, 0.02);
+      book.position.set(0, 1.5, 0);
       book.rotation.y = -0.35;
       deskGroup.add(book);
-      const coverMat = track(new THREE.MeshLambertMaterial({ color: 0x5b2430 })); // deep leather red
-      const pageMat = track(new THREE.MeshLambertMaterial({ color: 0xf3ecd8 }));
+      const coverMat = track(new THREE.MeshLambertMaterial({ color: 0x1e2a3a })); // midnight blue leather
+      const trimMat = track(new THREE.MeshBasicMaterial({ color: HOLO }));        // glowing cyan trim
+      const pageMat = track(new THREE.MeshLambertMaterial({ color: 0xf6efdc }));
       const edgeMat = track(new THREE.MeshLambertMaterial({ color: 0xd8cfb2 }));
+      const goldMat = track(new THREE.MeshLambertMaterial({ color: 0xc9a24b }));
       const makeHalf = (side: -1 | 1) => {
         const half = new THREE.Group();
-        // cover board (slightly larger, angled like a real open book)
         const cover = new THREE.Mesh(boxGeo, coverMat);
         cover.scale.set(0.48, 0.035, 0.64);
         cover.rotation.z = side * 0.16;
         half.add(cover);
-        // page block with visible cream edges (3 stacked slabs, tiny offsets)
+        // glowing trim along the cover's outer edge
+        const trim = new THREE.Mesh(boxGeo, trimMat);
+        trim.scale.set(0.03, 0.04, 0.645);
+        trim.position.set(side * 0.24, 0, 0);
+        trim.rotation.z = side * 0.16;
+        half.add(trim);
         for (let i = 0; i < 3; i++) {
           const slab = new THREE.Mesh(boxGeo, i === 0 ? pageMat : edgeMat);
           slab.scale.set(0.455 - i * 0.006, 0.016, 0.615 - i * 0.008);
@@ -592,7 +711,6 @@ export function MuseumGallery({
           slab.rotation.z = side * (0.16 + i * 0.012);
           half.add(slab);
         }
-        // fanned top pages
         for (let i = 0; i < 3; i++) {
           const page = new THREE.Mesh(planeGeo, pageMat);
           page.scale.set(0.44 - i * 0.012, 0.6 - i * 0.02, 1);
@@ -606,22 +724,88 @@ export function MuseumGallery({
       };
       book.add(makeHalf(-1));
       book.add(makeHalf(1));
-      // spine wedge in the middle
       const spine = new THREE.Mesh(boxGeo, coverMat);
       spine.scale.set(0.06, 0.05, 0.65);
       spine.position.y = 0.015;
       book.add(spine);
-      // ribbon bookmark
-      const ribbon = new THREE.Mesh(boxGeo, track(new THREE.MeshLambertMaterial({ color: 0xb9962f })));
+      const ribbon = new THREE.Mesh(boxGeo, goldMat);
       ribbon.scale.set(0.05, 0.012, 0.5);
       ribbon.position.set(0.12, 0.1, -0.12);
       ribbon.rotation.y = 0.3;
       book.add(ribbon);
-      // soft light pool on the open pages
-      const bookGlow = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color: 0xfff2cd, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })));
-      bookGlow.scale.set(1.5, 1.2, 1);
-      bookGlow.position.set(0, 0.45, 0);
+      // glow under the pages + hovering light
+      const bookGlow = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color: 0xfff2cd, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false })));
+      bookGlow.scale.set(1.6, 1.1, 1);
+      bookGlow.position.set(0, -0.18, 0);
       book.add(bookGlow);
+
+      // ---- the hologram above the book ----
+      const holoMats: THREE.MeshBasicMaterial[] = [];
+      const holoMat = (opacity: number) => {
+        const m = track(new THREE.MeshBasicMaterial({ color: HOLO, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, wireframe: false }));
+        holoMats.push(m);
+        return m;
+      };
+      // volumetric light cone rising from the emitter (two nested cones)
+      const coneGeo = track(new THREE.ConeGeometry(0.62, 2.0, 40, 1, true));
+      const coneOuter = new THREE.Mesh(coneGeo, holoMat(0.09));
+      coneOuter.position.set(0, 2.15, 0);
+      deskGroup.add(coneOuter);
+      const coneInner = new THREE.Mesh(track(new THREE.ConeGeometry(0.34, 2.0, 32, 1, true)), holoMat(0.15));
+      coneInner.position.set(0, 2.15, 0);
+      deskGroup.add(coneInner);
+      // wireframe globe (the hologram core) + bright inner core
+      const globe = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.36, 1)), (() => {
+        const m = track(new THREE.MeshBasicMaterial({ color: 0x8df5ff, wireframe: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+        holoMats.push(m);
+        return m;
+      })());
+      globe.position.set(0, 2.85, 0);
+      deskGroup.add(globe);
+      const coreMat = holoMat(0.9);
+      const core = new THREE.Mesh(track(new THREE.SphereGeometry(0.1, 16, 12)), coreMat);
+      core.position.copy(globe.position);
+      deskGroup.add(core);
+      // counter-rotating orbit rings
+      const torusGeo = track(new THREE.TorusGeometry(0.5, 0.009, 8, 56));
+      const orbitA = new THREE.Mesh(torusGeo, holoMat(0.75));
+      orbitA.position.copy(globe.position);
+      orbitA.rotation.x = Math.PI / 2 - 0.45;
+      deskGroup.add(orbitA);
+      const orbitB = new THREE.Mesh(torusGeo, holoMat(0.55));
+      orbitB.position.copy(globe.position);
+      orbitB.rotation.x = Math.PI / 2 + 0.5;
+      orbitB.rotation.y = 0.6;
+      deskGroup.add(orbitB);
+      // soft hologram aura sprite
+      const holoAura = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: track(softRadialTexture()), color: HOLO, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })));
+      holoAura.scale.set(1.7, 1.7, 1);
+      holoAura.position.copy(globe.position);
+      deskGroup.add(holoAura);
+      // hologram light spill
+      const holoLight = new THREE.PointLight(HOLO, 10, 7, 1.8);
+      holoLight.position.set(0, 2.6, 0);
+      deskGroup.add(holoLight);
+
+      // stash base opacities for the flicker loop (holoMats filled above)
+      const holoBase = holoMats.map((m) => m.opacity);
+
+      // ---- per-frame animation: bob, slow display spin, flicker ----
+      animated.push((t, dt) => {
+        book.position.y = 1.5 + Math.sin(t * 1.1) * 0.055;
+        book.rotation.y = t * 0.28; // levitating display: never stuck edge-on
+        book.rotation.z = Math.sin(t * 0.7) * 0.015;
+        globe.rotation.y += dt * 0.7;
+        globe.rotation.x = Math.sin(t * 0.5) * 0.2;
+        orbitA.rotation.z += dt * 0.9;
+        orbitB.rotation.z -= dt * 0.65;
+        orbitB.rotation.y = 0.6 + Math.sin(t * 0.3) * 0.25;
+        core.scale.setScalar(0.8 + 0.25 * Math.sin(t * 3.2));
+        // hologram scan flicker: subtle high-frequency shimmer + slow breathing
+        const flick = 0.9 + 0.1 * Math.sin(t * 21.0) * Math.sin(t * 7.3) + 0.06 * Math.sin(t * 1.4);
+        for (let i = 0; i < holoMats.length; i++) holoMats[i].opacity = Math.min(1, holoBase[i] * flick);
+        rimMat.opacity = 0.75 + 0.25 * Math.sin(t * 2.2);
+      });
     }
 
     // Warm point lights down each corridor so the walkways read as lit
@@ -712,6 +896,8 @@ export function MuseumGallery({
     const autoGoto = { active: false, pos: new THREE.Vector3(), yaw: 0, then: null as null | (() => void), deadline: 0 };
 
     const walkable = (x: number, z: number): boolean => {
+      // hologram pedestal footprint at the hub center (stop before it)
+      if (Math.abs(x) < 0.9 && Math.abs(z) < 0.68) return false;
       // Inside a corridor strip?
       for (const c of colliders) {
         const along = x * c.dir.x + z * c.dir.z;
@@ -885,6 +1071,8 @@ export function MuseumGallery({
       keys: [...keys], auto: autoGoto.active,
       walkable: walkable(player.pos.x, player.pos.z),
       colliders: colliders.length, arts: artworks.length,
+      portals: scene.children.filter((o) => (o as THREE.Mesh).material && (o as THREE.Mesh).material instanceof THREE.ShaderMaterial).length,
+      drawCalls: renderer.info.render.calls,
     });
 
     /* ---------------- loop ---------------- */
@@ -1009,6 +1197,9 @@ export function MuseumGallery({
         dp.setX(i, dp.getX(i) + Math.sin(clock.elapsedTime * 0.6 + dustSeed[i]) * dt * 0.02);
       }
       dp.needsUpdate = true;
+
+      // portals swirl, hologram spins, book bobs (registered closures)
+      for (const fn of animated) fn(clock.elapsedTime, dt);
 
       renderer.render(scene, camera);
     };

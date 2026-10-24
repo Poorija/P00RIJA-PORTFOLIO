@@ -63,17 +63,24 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   const langSel = useContent((s) => s.lang);
 
   /** The desk book at the museum hub: the owner's profile & résumé bound
-   *  into one catalogue (cover=avatar, about=bio, process=timeline,
-   *  specs=skills+facts, links=socials+email+résumé download). */
+   *  into one catalogue — EVERYTHING the About section holds: full bio,
+   *  complete timeline, all facts/skills/stats/languages, phone, socials,
+   *  email and the résumé download. */
   const resumeProject: ProjectArtwork = useMemo(() => {
     const fa = langSel === "fa";
-    const timeline = (timelineCfg?.entries ?? []).slice(0, 8).map((e) => ({
+    const timeline = (timelineCfg?.entries ?? []).map((e) => ({
       title: `${e.title}${e.org ? ` — ${e.org}` : ""}`,
       date: e.date,
       description: e.description,
     }));
-    const skills = (profileCfg?.skills ?? []).slice(0, 8).map((sk) => ({ key: sk.label, value: `${sk.level}%` }));
-    const facts = (profileCfg?.facts ?? []).slice(0, 8).map((f) => ({ key: f.key, value: f.value }));
+    const skills = (profileCfg?.skills ?? []).map((sk) => ({ key: sk.label, value: `${sk.level}%` }));
+    const facts = (profileCfg?.facts ?? []).map((f) => ({ key: f.key, value: f.value }));
+    const stats = (profileCfg?.stats ?? []).map((st) => ({ key: st.label, value: st.value }));
+    const languages = (profileCfg?.languages ?? []).map((l) => ({ key: l.name, value: l.level }));
+    const contactSpecs: { key: string; value: string }[] = [];
+    if (profileCfg?.location) contactSpecs.push({ key: fa ? "موقعیت" : "Location", value: profileCfg.location });
+    if (profileCfg?.phone) contactSpecs.push({ key: fa ? "تلفن" : "Phone", value: profileCfg.phone });
+    if (profileCfg?.availability) contactSpecs.push({ key: fa ? "وضعیت" : "Availability", value: profileCfg.availability });
     const socials: { label: string; url: string; kind: "live" | "source" | "github" | "docs" | "other" }[] = [];
     for (const so of profileCfg?.socials ?? []) {
       if (so?.url) socials.push({ label: so.label || so.platform || "link", url: so.url, kind: "other" });
@@ -92,7 +99,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
       client: profileCfg?.location || "",
       role: profileCfg?.tagline || "",
       description: profileCfg?.bio || developerCfg?.description || "",
-      specs: [...facts, ...skills],
+      specs: [...facts, ...skills, ...languages, ...stats, ...contactSpecs],
       images: profileCfg?.avatar ? [profileCfg.avatar] : [],
       link: "",
       links: socials,
