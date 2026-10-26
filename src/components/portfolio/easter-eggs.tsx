@@ -173,6 +173,7 @@ export function EasterEggManager() {
     if (idleTimer.current) clearTimeout(idleTimer.current);
     if (screensaverMs <= 0) return; // 0 = disabled in the CMS
     idleTimer.current = setTimeout(() => {
+      if (document.querySelector("[data-virtual-gallery], [data-gallery-catalog], [data-guard-dialog]")) return;
       setScreensaver(true);
       achieve("screensaver");
     }, screensaverMs);

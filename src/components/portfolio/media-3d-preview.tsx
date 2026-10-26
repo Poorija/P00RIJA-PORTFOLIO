@@ -2,15 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { OrbitalLoader } from "./orbital-loader";
 
 export function Media3DPreview({ url, filename, className = "h-44 w-full" }: { url: string; filename?: string; className?: string }) {
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const container = host.current;
     if (!container || !url) return;
     setError(false);
+    setReady(false);
     let disposed = false;
     let frame = 0;
     let object: THREE.Object3D | undefined;
@@ -33,6 +36,7 @@ export function Media3DPreview({ url, filename, className = "h-44 w-full" }: { u
       loaded.position.sub(center);
       loaded.scale.multiplyScalar(1.8 / longest);
       scene.add(loaded);
+      if (!disposed) setReady(true);
     };
     const fail = () => { if (!disposed) setError(true); };
     let routedFilename = "";
@@ -68,6 +72,7 @@ export function Media3DPreview({ url, filename, className = "h-44 w-full" }: { u
   }, [filename, url]);
 
   return <div ref={host} className={`relative overflow-hidden rounded-lg bg-gradient-to-br from-[var(--ai-1)]/10 to-[var(--sec-1)]/10 ${className}`}>
+    {!ready && !error && <OrbitalLoader label="Loading 3D preview…" className="bg-transparent" />}
     {error && <div className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">3D preview unavailable</div>}
   </div>;
 }

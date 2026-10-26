@@ -78,7 +78,11 @@ export function GraphicsSection() {
         <div data-cms-node="portfolio-grid" className="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
           <Reveal>
             <div data-cms-node="primary-object" data-cms-object className="flex items-center justify-center lg:sticky lg:top-20 py-8">
-              <LiquidMorphObject config={mainObject} />
+              {!mainObject || mainObject.kind === "glass-blob" ? <LiquidMorphObject config={mainObject} /> : (
+                <div className="relative size-[340px] max-w-full">
+                  <Ambient3DObject config={mainObject} className="block" defaultPlacement={{ side: "center", top: 10, offset: 0, size: 320 }} />
+                </div>
+              )}
             </div>
           </Reveal>
 

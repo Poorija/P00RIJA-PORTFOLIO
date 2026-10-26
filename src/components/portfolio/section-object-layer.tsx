@@ -5,8 +5,8 @@ import type { SceneObject3DConfig } from "@/lib/content-types";
 import { Ambient3DObject } from "@/components/portfolio/ambient-3d-object";
 
 function variantFor(kind: SceneObject3DConfig["kind"]): "crystal" | "neural" | "orbit" {
-  if (kind === "neural") return "neural";
-  if (kind === "orbit") return "orbit";
+  if (kind === "neural" || kind === "lattice") return "neural";
+  if (kind === "orbit" || kind === "palette" || kind === "prism") return "orbit";
   return "crystal";
 }
 

@@ -16,13 +16,22 @@ import {
   Lock,
   Play,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useDialogFocus } from "./use-dialog-focus";
 import { useContent } from "@/lib/content-store";
 import { projectTarget } from "@/lib/guard-targets";
 import { GuardUnlockDialog } from "./section-guard";
-import { MuseumGallery } from "./museum-gallery";
-import { GalleryCatalog } from "./gallery-catalog";
 import { useSuspendLenis } from "./smooth-scroll";
+import { OrbitalLoader } from "./orbital-loader";
 import type { GalleryLayout, ProjectArtwork } from "@/lib/content-types";
+
+function GalleryLoading() {
+  const lang = useContent((state) => state.lang);
+  return <div className="relative h-full min-h-48 w-full"><OrbitalLoader lang={lang} /></div>;
+}
+
+const MuseumGallery = dynamic(() => import("./museum-gallery").then((module) => module.MuseumGallery), { ssr: false, loading: GalleryLoading });
+const GalleryCatalog = dynamic(() => import("./gallery-catalog").then((module) => module.GalleryCatalog), { ssr: false, loading: GalleryLoading });
 
 interface Props {
   projects: ProjectArtwork[];
@@ -90,6 +99,11 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
     if (profileCfg?.resumeUrl) {
       socials.push({ label: profileCfg.resumeLabel || (fa ? "دانلود رزومه" : "Download résumé"), url: profileCfg.resumeUrl, kind: "docs" });
     }
+    const applicationFeatures = (profileCfg?.projectFeatures ?? []).filter(Boolean).map((feature, index) => ({
+      key: `${profileCfg?.projectTitle || (fa ? "ویژگی برنامه" : "Application feature")} ${index + 1}`,
+      value: feature,
+    }));
+    if (profileCfg?.resumeHint) applicationFeatures.push({ key: fa ? "راهنمای رزومه" : "Résumé note", value: profileCfg.resumeHint });
     return {
       title: profileCfg?.name || developerCfg?.name || (fa ? "درباره من" : "About me"),
       meta: profileCfg?.role || developerCfg?.role || "",
@@ -98,8 +112,8 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
       year: profileCfg?.availability || "",
       client: profileCfg?.location || "",
       role: profileCfg?.tagline || "",
-      description: profileCfg?.bio || developerCfg?.description || "",
-      specs: [...facts, ...skills, ...languages, ...stats, ...contactSpecs],
+      description: [profileCfg?.bio || developerCfg?.description, profileCfg?.projectDescription].filter(Boolean).join("\n\n"),
+      specs: [...facts, ...skills, ...languages, ...stats, ...contactSpecs, ...applicationFeatures],
       images: profileCfg?.avatar ? [profileCfg.avatar] : [],
       link: "",
       links: socials,
@@ -117,6 +131,13 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   const [catalogProject, setCatalogProject] = useState<ProjectArtwork | null>(null);
   const [catalogLabel, setCatalogLabel] = useState("");
   const [lockReq, setLockReq] = useState<{ target: string; label: string } | null>(null);
+  const dialogRef = useDialogFocus<HTMLDivElement>();
+
+  useEffect(() => {
+    setCurrent((index) => Math.min(index, Math.max(0, projects.length - 1)));
+    setActive((index) => index !== null && index >= projects.length ? null : index);
+    setLockDialogIdx((index) => index !== null && index >= projects.length ? null : index);
+  }, [projects.length]);
 
   /* Per-project Access Guard: the SERVER already replaced locked projects
    * with identity-only stubs (locked:true, empty payload). Clicking such a
@@ -154,7 +175,9 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
       if (e.key === "Escape") {
         if (active !== null) setActive(null);
         else onClose();
-      } else if (active === null) {
+      } else if (active === null && projects.length > 0) {
+        const interactive = e.target instanceof Element && Boolean(e.target.closest("button, a, input, textarea, select, [contenteditable='true'], [role='button']"));
+        if (interactive) return;
         if (e.key === "ArrowRight") setCurrent((c) => (c + 1) % projects.length);
         else if (e.key === "ArrowLeft") setCurrent((c) => (c - 1 + projects.length) % projects.length);
       }
@@ -167,6 +190,8 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
 
   return createPortal(
     <motion.div
+      ref={dialogRef}
+      data-virtual-gallery
       className="fixed inset-0 z-[110] flex h-dvh w-screen flex-col overflow-hidden"
       role="dialog"
       aria-modal="true"
@@ -237,6 +262,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
             <MuseumGallery
               lang={lang}
               spawnWingId={sectionId}
+              paused={Boolean(catalogProject || lockReq)}
               onOpenCatalog={(project, wingLabel) => {
                 setCatalogProject(project);
                 setCatalogLabel(wingLabel);

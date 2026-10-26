@@ -1,3 +1,56 @@
-museum-*.png
-v41-*.png
-museum-*.png
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+**/id_rsa*
+**/id_ed25519*
+**/*_deploy
+**/.ssh/
+
+# Databases, uploads, and runtime state
+db/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+logs/
+*.log
+
+# Editor, OS, and test artifacts
+.DS_Store
+.playwright-mcp/
+.mimosa/
+agent-ctx/
+tool-results/
+coverage/
+/*.png
+
+# Local tooling notes and machine-specific files
+AGENTS.md
+CLAUDE.md
+worklog.md
+.zcodeignore
+Caddyfile
+docker-compose.web.yml
+docker-compose.server.yml
+license-server/
+Dockerfile.license
+docker-compose.license.yml
+docker-compose.license.local.yml
+download/
+examples/
+mini-services/
+--port
+7891

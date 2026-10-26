@@ -38,3 +38,4 @@ docker-compose.server.yml
 # Internal agent/tooling notes
 AGENTS.md
 CLAUDE.md
+worklog.md

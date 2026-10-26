@@ -6,6 +6,7 @@ import type { SceneObject3DConfig } from "@/lib/content-types";
 import { useContent } from "@/lib/content-store";
 import { makeFrameGate } from "@/lib/anim";
 import { liveAudio } from "@/lib/audio-energy";
+import { createProceduralObject } from "@/lib/procedural-objects";
 
 type Variant = "crystal" | "neural" | "orbit";
 
@@ -197,9 +198,10 @@ function buildScene(
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 80);
     camera.position.set(0, 0, 10);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+    const lowPower = (navigator.hardwareConcurrency || 4) <= 2 || Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4) <= 2;
+    const renderer = new THREE.WebGLRenderer({ antialias: !lowPower, alpha: true, powerPreference: lowPower ? "low-power" : "high-performance" });
     renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? 1 : maxDpr));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.className = "absolute inset-0 h-full w-full";
     mount.appendChild(renderer.domElement);
@@ -215,19 +217,19 @@ function buildScene(
     scene.add(fill);
 
     const objectKind = config?.kind && config.kind !== "model" ? config.kind : variant;
-    const coreGeometry =
-      objectKind === "neural"
-        ? new THREE.TorusKnotGeometry(1.65, 0.28, 180, 18, 2, 5)
-        : objectKind === "orbit"
-          ? new THREE.OctahedronGeometry(1.8, 3)
-          : new THREE.IcosahedronGeometry(1.85, 4);
-    const core = new THREE.Mesh(
-      coreGeometry,
+    const procedural = createProceduralObject(objectKind, [primary.getHex(), secondary.getHex(), tertiary.getHex()], lowPower);
+    const coreGeometry = procedural ? null : objectKind === "neural"
+      ? new THREE.TorusKnotGeometry(1.65, 0.28, lowPower ? 88 : 180, lowPower ? 10 : 18, 2, 5)
+      : objectKind === "orbit"
+        ? new THREE.OctahedronGeometry(1.8, lowPower ? 1 : 3)
+        : new THREE.IcosahedronGeometry(1.85, lowPower ? 2 : 4);
+    const core: THREE.Object3D = procedural ?? new THREE.Mesh(
+      coreGeometry!,
       new THREE.MeshPhysicalMaterial({
         color: new THREE.Color(primary).lerp(new THREE.Color(0xffffff), 0.26),
         roughness: 0.14,
         metalness: 0.04,
-        transmission: 0.32,
+        transmission: lowPower ? 0 : 0.32,
         thickness: 1.6,
         transparent: true,
         opacity: Math.max(0.18, opacity * 0.6),
@@ -382,14 +384,12 @@ function buildScene(
       observer.disconnect();
       visibilityObserver.disconnect();
       mount.removeChild(renderer.domElement);
-      coreGeometry.dispose();
-      (core.material as THREE.Material).dispose();
-      rings.forEach((ring) => {
-        ring.geometry.dispose();
-        (ring.material as THREE.Material).dispose();
+      root.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        mesh.geometry?.dispose();
+        const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+        materials.forEach((material) => material.dispose());
       });
-      particleGeometry.dispose();
-      (particles.material as THREE.Material).dispose();
       renderer.dispose();
       // actually return the GL context to the browser's pool — without
       // this the "too many contexts" cap still churns through losses

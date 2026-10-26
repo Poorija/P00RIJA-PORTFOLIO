@@ -71,6 +71,7 @@ tar -cf - \
   --exclude './Caddyfile' \
   --exclude './AGENTS.md' \
   --exclude './CLAUDE.md' \
+  --exclude './worklog.md' \
   --exclude './*.log' \
   --exclude './--port' \
   --exclude './7891' \

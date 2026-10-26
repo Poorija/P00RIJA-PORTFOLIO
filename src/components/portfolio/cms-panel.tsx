@@ -109,6 +109,7 @@ import { CmsDefenseCenter } from "./cms-defense-center";
 import { CmsVisualBuilder } from "./cms-visual-builder";
 import { CmsFormDesigner } from "./cms-form-designer";
 import { Media3DPreview } from "./media-3d-preview";
+import { ProceduralObjectLibrary } from "./procedural-object-library";
 import { CmsSiteGuard } from "./cms-site-guard";
 
 /* ------------------------------------------------------------------ *
@@ -3566,6 +3567,7 @@ function SectionForm({
             title="3D Object Factory / کارخانه ساخت آبجکت سه‌بعدی"
             hint="آبجکت‌ها را جابه‌جا کن، رنگ/افکت/انیمیشن بده، GLB/GLTF آپلود کن، یا با slotهای hero-primary و planetary-center جایگزین اول سایت و مرکز سیارات کن."
           >
+            <ProceduralObjectLibrary lang={lang} onInsert={(object) => setDesign("objects", [...(v.objects ?? []), object])} />
             <ObjectListField
               label="3D objects"
               items={v.objects ?? []}
@@ -3576,7 +3578,7 @@ function SectionForm({
                 { key: "enabled", label: "Enabled", type: "checkbox" },
                 { key: "slot", label: "Slot: section/hero-primary/planetary-center/graphics-main/graphics-ambient/security-ambient/ai-ambient/custom", type: "text" },
                 { key: "sectionId", label: lang === "fa" ? "شناسه سکشن مقصد (مثلاً ai یا custom-...)" : "Target section ID (for example ai or custom-...)", type: "text" },
-                { key: "kind", label: "Kind: glass-blob/crystal/orbit/neural/model", type: "text" },
+                { key: "kind", label: "Kind: glass-blob/crystal/orbit/neural/ribbon/prism/pen-nib/palette/lattice/capsule/model", type: "text" },
                 { key: "modelUrl", label: "Upload GLB/GLTF or model URL", type: "file" },
                 { key: "link", label: "Link / section URL", type: "text" },
                 { key: "colorA", label: "Color A", type: "color" },
