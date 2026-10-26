@@ -12,7 +12,7 @@
 [![Node](https://img.shields.io/badge/Node-24-339933?logo=nodedotjs)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-commercial-important)](LICENSE-COMMERCIAL.md)
 
-`v3.3.1` · Next.js 16 (App Router · Turbopack · standalone) · React 19 · Tailwind 4 · Prisma 6/SQLite · Three.js · Lenis — **sized to run on a 1-core / 512 MB VPS** · Developer: [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com)
+`v4.3.0` · Next.js 16 (App Router · Turbopack · standalone) · React 19 · Tailwind 4 · Prisma 6/SQLite · Three.js · Lenis — **tested with 1 CPU / 512 MB RAM (about 101 MB idle runtime)** · Developer: [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com)
 
 </div>
 
@@ -27,6 +27,9 @@ A single-page, space-themed portfolio with a full built-in CMS. Three orbiting w
 ### ✨ Highlights
 
 - 🪐 **3D planetary navigation** — click a planet, dive into its world
+- 🧊 **21 procedural 3D objects** — bilingual Object Factory library with one live preview, graphics-specific sculptures, space models, robots, atoms, DNA, Möbius geometry, a gamepad, and more; all geometry is created in the visitor's browser with no external model downloads
+- 🛰 **Walkable spaceship gallery** — dynamic CMS corridors, glass ceilings, space traffic, holographic About Me, and large physical project books with smooth drag/RTL page turns, keyboard movement, jumping, and mobile joystick controls
+- 🔄 **Animated orbital loading** — lightweight Web Animations API orbits with slower reduced-motion behavior; shared across initial loading, galleries, books, and 3D previews
 - 🖼 **Cinematic virtual galleries** — per-project media, specs and multi-links; a gallery can be added to **any** section
 - 🔐 **Access Guard** — password-protect the **whole site**, any **section**, or **each gallery independently**: 4/6-digit PIN or text password, **temporary passwords with auto-expiry**, attempt-limited locks (bank-card style disable), server-side content withholding, `/gate` site-wide screen
 - 🎮 **Galaxy Arcade** — 26 built-in games in a console-style overlay (header button or `G`), per-game high scores, RTL-safe controls
@@ -77,6 +80,9 @@ bash scripts/deploy-image.sh user@your-server   # load + restart + health check
 ### ✨ امکانات کلیدی
 
 - 🪐 **ناوبری سیاره‌ای سه‌بعدی** — روی سیاره کلیک کنید و به دنیای آن شیرجه بزنید
+- 🧊 **۲۱ آبجکت سه‌بعدی procedural** — کتابخانه دوزبانه Object Factory با یک پیش‌نمایش زنده، مجسمه‌های مخصوص گرافیک، مدل‌های فضایی، ربات، اتم، DNA، هندسه موبیوس، گیم‌پد و موارد دیگر؛ همه در مرورگر بازدیدکننده ساخته می‌شوند و فایل مدل خارجی نمی‌خواهند
+- 🛰 **گالری قدم‌زدنی در فضاپیما** — راهروهای داینامیک CMS، سقف شیشه‌ای، ترافیک فضایی، About Me هولوگرافیک و کتاب‌های بزرگ پروژه با ورق نرم، drag و RTL، حرکت با کیبورد، پرش و joystick موبایل
+- 🔄 **لودینگ مداری متحرک** — چرخش سبک با Web Animations API و حرکت آهسته‌تر در reduced-motion؛ مشترک در ورود، گالری، کتاب و پیش‌نمایش سه‌بعدی
 - 🖼 **گالری‌های مجازی سینمایی** — رسانه، مشخصات و چند لینک برای هر پروژه؛ افزودن گالری به **هر بخش دلخواه**
 - 🔐 **قفل رمز (Access Guard)** — پسورد روی **کل سایت**، هر **بخش** یا **هر گالری به‌صورت مستقل**: رمز ۴/۶ رقمی یا متنی، **رمز موقت با انقضای خودکار**، حالت سقف تلاش (غیرفعال‌شدن مثل کارت بانکی)، حذف محتوای واقعی از سمت سرور تا وارد کردن رمز، صفحه‌ی `/gate` برای قفل کل سایت
 - 🎮 **مرکز بازی (Galaxy Arcade)** — ۲۶ بازی داخلی در اورلی کنسولی (دکمه‌ی هدر یا کلید `G`)، رکورد شخصی برای هر بازی، سازگار با راست‌به‌چپ

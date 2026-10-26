@@ -3578,7 +3578,7 @@ function SectionForm({
                 { key: "enabled", label: "Enabled", type: "checkbox" },
                 { key: "slot", label: "Slot: section/hero-primary/planetary-center/graphics-main/graphics-ambient/security-ambient/ai-ambient/custom", type: "text" },
                 { key: "sectionId", label: lang === "fa" ? "شناسه سکشن مقصد (مثلاً ai یا custom-...)" : "Target section ID (for example ai or custom-...)", type: "text" },
-                { key: "kind", label: "Kind: glass-blob/crystal/orbit/neural/ribbon/prism/pen-nib/palette/lattice/capsule/model", type: "text" },
+                { key: "kind", label: "Kind: glass-blob/crystal/orbit/neural/ribbon/prism/pen-nib/palette/lattice/capsule/atom/dna/mobius/gear/satellite/rocket/robot/gamepad/globe/cube/cluster/chain/flower/wave-sphere/cyber-eye/model", type: "text" },
                 { key: "modelUrl", label: "Upload GLB/GLTF or model URL", type: "file" },
                 { key: "link", label: "Link / section URL", type: "text" },
                 { key: "colorA", label: "Color A", type: "color" },

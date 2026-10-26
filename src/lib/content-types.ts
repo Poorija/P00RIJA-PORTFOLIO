@@ -217,7 +217,7 @@ export interface SceneObject3DConfig {
   slot: "hero-primary" | "planetary-center" | "graphics-main" | "graphics-ambient" | "security-ambient" | "ai-ambient" | "section" | "custom";
   /** Target section when slot=section. Built-ins and custom-* ids are valid. */
   sectionId?: string;
-  kind: "glass-blob" | "crystal" | "orbit" | "neural" | "ribbon" | "prism" | "pen-nib" | "palette" | "lattice" | "capsule" | "model";
+  kind: "glass-blob" | "crystal" | "orbit" | "neural" | "ribbon" | "prism" | "pen-nib" | "palette" | "lattice" | "capsule" | "atom" | "dna" | "mobius" | "gear" | "satellite" | "rocket" | "robot" | "gamepad" | "globe" | "cube" | "cluster" | "chain" | "flower" | "wave-sphere" | "cyber-eye" | "model";
   modelUrl: string;
   link: string;
   colorA: string;
