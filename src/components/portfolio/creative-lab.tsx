@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pause, Play, RotateCcw, Shuffle, X } from "lucide-react";
-import { AquariumExperiment, CampfireExperiment } from "./lab-nature-scenes";
+import { CampfireExperiment } from "./ascii-campfire";
+import { AquariumExperiment } from "./ascii-quarium";
 
 export type LabExperiment = "starfield" | "plasma" | "fractal" | "life" | "particles" | "harmonograph" | "fire" | "maze" | "synth" | "typing" | "aquarium" | "camp";
 
