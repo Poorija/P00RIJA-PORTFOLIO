@@ -53,6 +53,13 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "credits", emoji: "🎬", fa: "تماشای اعتبارها", en: "Watched the credits", secret: true },
   { id: "hint-card", emoji: "🗝️", fa: "کلید رازها", en: "Key of secrets", secret: true },
   { id: "terminal-secret", emoji: "🛰️", fa: "دستیار مخفی", en: "Hidden assistant", secret: true },
+  { id: "terminal-ascii", emoji: "🔡", fa: "رمزگشای پیکسل", en: "Pixel decoder", secret: true },
+  { id: "matrix-choice", emoji: "🕶️", fa: "ملاقات مورفئوس", en: "Met Morpheus", secret: true },
+  { id: "matrix-blue", emoji: "🔵", fa: "بیدار شدن", en: "Woke up", secret: true },
+  { id: "matrix-red", emoji: "🔴", fa: "عمق سوراخ خرگوش", en: "Down the rabbit hole", secret: true },
+  { id: "golden-p00rija", emoji: "🏆", fa: "کلید سه جهان", en: "Key of three worlds", secret: true },
+  { id: "creator-signature", emoji: "✨", fa: "امضای خالق", en: "Creator signature", secret: true },
+  { id: "golden-hunter", emoji: "🥚", fa: "شکار تخم‌مرغ طلایی", en: "Golden egg hunter", secret: true },
 ];
 
 type Unlocked = Record<string, number>;

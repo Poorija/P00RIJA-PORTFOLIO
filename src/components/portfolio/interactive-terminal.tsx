@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { Terminal as TerminalIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useContent } from "@/lib/content-store";
 import { openGameCenter } from "./game-center";
+import { AsciiMediaPlayer } from "./ascii-media-player";
+import { MatrixChoiceScene } from "./matrix-choice-scene";
 
 /* ============================================================
  * InteractiveTerminal — a simulated secure shell that boots
@@ -329,6 +331,11 @@ interface Ctx {
   pushMany: (kind: LineKind, texts: string[]) => void;
   isAlive: () => boolean;
   history: string[];
+  openScene: (scene: "media" | "matrix") => void;
+  choosePill: (pill: "red" | "blue") => void;
+  resize: (preset: string) => void;
+  quest: (action: "start" | "solve", answer?: string) => void;
+  profile: { name: string; role: string; email: string; location: string };
 }
 
 interface CommandDef {
@@ -1015,6 +1022,85 @@ const COMMANDS: CommandDef[] = [
     ]),
   },
   {
+    name: "ascii", desc: "render a local image or video as ASCII",
+    run: ({ openScene, push }) => {
+      push("success", "> ASCII decoder ready. Select a local image or video; nothing is uploaded.");
+      openScene("media");
+    },
+  },
+  {
+    name: "chose", desc: "Morpheus offers the blue or red pill",
+    run: ({ openScene, push }) => {
+      push("success", "> entering the pill protocol…");
+      openScene("matrix");
+    },
+  },
+  {
+    name: "choose", desc: "alias for chose", hidden: true,
+    run: ({ openScene }) => openScene("matrix"),
+  },
+  {
+    name: "red", desc: "take the red pill",
+    run: ({ choosePill }) => choosePill("red"),
+  },
+  {
+    name: "blue", desc: "take the blue pill",
+    run: ({ choosePill }) => choosePill("blue"),
+  },
+  {
+    name: "resize", usage: "compact|normal|large|full", desc: "resize the terminal window",
+    run: ({ resize, arg, push }) => {
+      resize(arg || "normal");
+      push("muted", `> window geometry: ${arg || "normal"}`);
+    },
+  },
+  {
+    name: "whoami", desc: "identify the creator of this portfolio",
+    run: ({ profile, push, pushMany }) => {
+      pushMany("output", [profile.name, `role: ${profile.role}`, `location: ${profile.location}`, `contact: ${profile.email}`]);
+      push("muted", "// three worlds, one signature — no privileged server session attached");
+    },
+  },
+  {
+    name: "comment", desc: "print a shell-side comment",
+    run: ({ push }) => {
+      const comments = [
+        "// gravity is optional; backups are not.",
+        "// CSS is just spells with better documentation.",
+        "// 200+ servers hardened; zero coffee machines patched.",
+        "// three planets orbit, but the deadlines follow me.",
+        "// if (beauty && resilience && intelligence) return P00RIJA;",
+        "// the firewall trusts no one — especially my old code.",
+      ];
+      push("output", comments[Math.floor(Math.random() * comments.length)]);
+    },
+  },
+  {
+    name: "quest", desc: "start the three-worlds key hunt",
+    run: ({ quest, arg }) => quest("start", arg),
+  },
+  {
+    name: "solve", usage: "<answer>", desc: "submit a quest key",
+    run: ({ quest, arg, push }) => {
+      if (!arg) return push("error", "usage: solve <answer>");
+      quest("solve", arg.toLowerCase());
+    },
+  },
+  {
+    name: "p00rija", desc: "creator signature", hidden: true,
+    run: ({ push, pushMany }) => {
+      pushMany("success", ["  ____  ____  ____  ____  ____", " / P00RIJA // DESIGN·SEC·AI /", " ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾", "signature verified: one creator, three worlds."]);
+      try { window.dispatchEvent(new CustomEvent("achieve", { detail: "creator-signature" })); } catch {}
+    },
+  },
+  {
+    name: "golden", desc: "golden egg hints", hidden: true,
+    run: ({ push, pushMany }) => {
+      pushMany("output", ["GOLDEN EGGS:", "  01 — a number hidden in .secret", "  02 — the order of three worlds", "  03 — a signature written in ROT13", "  04 — the year of the first ML model", "Use `quest` and `solve <answer>`."]);
+      try { window.dispatchEvent(new CustomEvent("achieve", { detail: "golden-hunter" })); } catch {}
+    },
+  },
+  {
     name: "exit", desc: "logout and reboot",
     run: async ({ push, reboot }) => {
       push("muted", "logout");
@@ -1041,6 +1127,7 @@ const COMMAND_NAMES = COMMANDS.map((c) => c.name);
 
 export function InteractiveTerminal() {
   const lang = useContent((s) => s.lang);
+  const profileCfg = useContent((s) => s.content.profile);
   const [lines, setLines] = useState<Line[]>([]);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -1048,9 +1135,15 @@ export function InteractiveTerminal() {
   const [cwd, setCwd] = useState(HOME_DIR);
   const [busy, setBusy] = useState(true);
   const [tabHint, setTabHint] = useState<string | null>(null);
+  const [asciiScene, setAsciiScene] = useState<"media" | "matrix" | null>(null);
+  const [matrixPill, setMatrixPill] = useState<"red" | "blue" | null>(null);
+  const [questStage, setQuestStage] = useState(0);
+  const [terminalSize, setTerminalSize] = useState<{ width: number | null; height: number }>({ width: null, height: 300 });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const outRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const resizeDragRef = useRef<{ id: number; x: number; y: number; width: number; height: number } | null>(null);
   const runIdRef = useRef(0);
   const runCommandRef = useRef<(cmd: string) => void>(() => {});
 
@@ -1071,6 +1164,62 @@ export function InteractiveTerminal() {
   }, []);
 
   const clearLines = useCallback(() => setLines([]), []);
+
+  const openScene = useCallback((scene: "media" | "matrix") => {
+    setMatrixPill(null);
+    setAsciiScene(scene);
+  }, []);
+
+  const choosePill = useCallback((pill: "red" | "blue") => {
+    if (asciiScene !== "matrix") {
+      pushLine("error", "no active pill protocol. Type `chose` first.");
+      return;
+    }
+    setMatrixPill(pill);
+  }, [asciiScene, pushLine]);
+
+  const resizeTerminal = useCallback((preset: string) => {
+    const height = window.innerHeight;
+    if (preset === "compact") setTerminalSize({ width: 540, height: 260 });
+    else if (preset === "large") setTerminalSize({ width: 1040, height: 540 });
+    else if (preset === "full") setTerminalSize({ width: null, height: Math.min(760, Math.max(420, height - 140)) });
+    else setTerminalSize({ width: null, height: 340 });
+  }, []);
+
+  const runQuest = useCallback((action: "start" | "solve", answer = "") => {
+    const clues = [
+      "KEY 01/04 — the number hidden in .secret. Use `cat .secret`, then `solve <number>`.",
+      "KEY 02/04 — order the worlds: design → Linux security → artificial intelligence. `solve design-linux-ai`.",
+      "KEY 03/04 — ROT13 of the creator signature P00RIJA (digits stay unchanged). `solve <rot13>`.",
+      "KEY 04/04 — the year of the first machine-learning model in the résumé. `solve <year>`.",
+    ];
+    if (action === "start") {
+      if (answer === "reset") setQuestStage(0);
+      const stage = answer === "reset" ? 0 : questStage;
+      if (stage >= 4) return pushLine("success", "QUEST COMPLETE — the three-worlds key is already yours. `quest reset` to replay.");
+      pushLine("success", `THREE-WORLDS QUEST\n${clues[stage]}`);
+      return;
+    }
+    const expected = ["42", "design-linux-ai", "c00ewvn", "2023"];
+    if (answer !== expected[questStage]) {
+      pushLine("error", `ACCESS DENIED — key ${questStage + 1} does not match. Use \`quest\` to read the clue again.`);
+      return;
+    }
+    const next = questStage + 1;
+    setQuestStage(next);
+    if (next < 4) {
+      pushLine("success", `KEY ACCEPTED.\n${clues[next]}`);
+      return;
+    }
+    pushLines("success", [
+      "  .------------------------.",
+      "  | THREE WORLDS UNLOCKED |",
+      "  '------------------------'",
+      "  DESIGN + SECURITY + AI = P00RIJA",
+      "  golden key accepted. Welcome, creator.",
+    ]);
+    try { window.dispatchEvent(new CustomEvent("achieve", { detail: "golden-p00rija" })); } catch {}
+  }, [pushLine, pushLines, questStage]);
 
   /* ---- boot sequence -------------------------------------- */
   const runBoot = useCallback(async () => {
@@ -1126,6 +1275,7 @@ export function InteractiveTerminal() {
     pushLine("system", msg.session);
     await sleep(180);
     pushLine("muted", msg.hint);
+    pushLine("muted", "// ascii decoder · pill protocol · three-worlds quest · harmless comments only");
     await sleep(120);
     if (runId !== runIdRef.current) return;
     setBusy(false);
@@ -1186,10 +1336,20 @@ export function InteractiveTerminal() {
         pushMany: pushLines,
         isAlive,
         history,
+        openScene,
+        choosePill,
+        resize: resizeTerminal,
+        quest: runQuest,
+        profile: {
+          name: profileCfg?.name || "P00RIJA",
+          role: profileCfg?.role || "Designer × Security engineer × AI developer",
+          email: profileCfg?.email || "p00rija@tutamail.com",
+          location: profileCfg?.location || "Tehran, Iran",
+        },
       };
       await def.run(ctx);
     },
-    [cwd, history, lang, pushLine, pushLines, runBoot, clearLines]
+    [cwd, history, lang, pushLine, pushLines, runBoot, clearLines, openScene, choosePill, resizeTerminal, runQuest, profileCfg]
   );
 
   /* ---- effects -------------------------------------------- */
@@ -1324,6 +1484,36 @@ export function InteractiveTerminal() {
     }
   };
 
+  const beginResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    const rect = terminalRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    resizeDragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, width: rect.width, height: rect.height };
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* window listeners are unnecessary for normal pointers */ }
+  };
+  const dragResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = resizeDragRef.current;
+    if (!drag || drag.id !== event.pointerId) return;
+    event.stopPropagation();
+    setTerminalSize({
+      width: Math.round(Math.max(320, Math.min(window.innerWidth - 32, drag.width + event.clientX - drag.x))),
+      height: Math.round(Math.max(220, Math.min(window.innerHeight - 32, drag.height + event.clientY - drag.y))),
+    });
+  };
+  const endResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (resizeDragRef.current?.id === event.pointerId) resizeDragRef.current = null;
+  };
+  const keyResize = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    setTerminalSize((size) => ({
+      width: event.key === "ArrowLeft" || event.key === "ArrowRight"
+        ? Math.max(320, Math.min(window.innerWidth - 32, (size.width ?? terminalRef.current?.clientWidth ?? 720) + (event.key === "ArrowRight" ? 32 : -32)))
+        : size.width,
+      height: Math.max(220, Math.min(window.innerHeight - 32, size.height + (event.key === "ArrowDown" ? 32 : event.key === "ArrowUp" ? -32 : 0))),
+    }));
+  };
+
   const prompt = `root@portfolio:${promptPath(cwd)}$`;
   const commandCount = useMemo(() => COMMANDS.filter((c) => !c.hidden).length, []);
 
@@ -1331,8 +1521,10 @@ export function InteractiveTerminal() {
 
   return (
     <div
-      className="overflow-hidden rounded-2xl border border-border bg-[oklch(0.1_0.02_165/0.92)] backdrop-blur"
-      style={{ boxShadow: "0 0 60px -20px var(--sec-glow)" }}
+      ref={terminalRef}
+      data-interactive-terminal
+      className="relative mx-auto flex flex-col overflow-hidden rounded-2xl border border-border bg-[oklch(0.1_0.02_165/0.92)] backdrop-blur"
+      style={{ boxShadow: "0 0 60px -20px var(--sec-glow)", width: terminalSize.width ?? "100%", height: terminalSize.height, maxWidth: "100%" }}
       onClick={() => inputRef.current?.focus()}
     >
       <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2.5">
@@ -1347,7 +1539,7 @@ export function InteractiveTerminal() {
 
       <div
         ref={outRef}
-        className="h-[300px] overflow-y-auto p-4 font-mono text-xs leading-relaxed no-scrollbar"
+        className="min-h-0 flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed no-scrollbar"
         dir="ltr"
         data-lenis-prevent
       >
@@ -1396,6 +1588,22 @@ export function InteractiveTerminal() {
             </div>
           </div>
         </form>
+      </div>
+      {asciiScene === "media" && <AsciiMediaPlayer lang={lang} onClose={() => setAsciiScene(null)} />}
+      {asciiScene === "matrix" && <MatrixChoiceScene lang={lang} pill={matrixPill} onChoose={setMatrixPill} onClose={() => { setAsciiScene(null); setMatrixPill(null); }} />}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label={lang === "fa" ? "تغییر اندازه ترمینال" : "Resize terminal"}
+        tabIndex={0}
+        onPointerDown={beginResize}
+        onPointerMove={dragResize}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        onKeyDown={keyResize}
+        className="absolute bottom-0 end-0 z-20 grid size-5 cursor-nwse-resize place-items-center text-white/35 outline-none hover:text-white/80 focus:text-white/80"
+      >
+        <span className="font-mono text-sm">↘</span>
       </div>
     </div>
   );
