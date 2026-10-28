@@ -57,6 +57,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "matrix-choice", emoji: "🕶️", fa: "ملاقات مورفئوس", en: "Met Morpheus", secret: true },
   { id: "matrix-blue", emoji: "🔵", fa: "بیدار شدن", en: "Woke up", secret: true },
   { id: "matrix-red", emoji: "🔴", fa: "عمق سوراخ خرگوش", en: "Down the rabbit hole", secret: true },
+  { id: "matrix-hidden", emoji: "🐇", fa: "شل مخفی سیون", en: "Zion hidden shell", secret: true },
   { id: "golden-p00rija", emoji: "🏆", fa: "کلید سه جهان", en: "Key of three worlds", secret: true },
   { id: "creator-signature", emoji: "✨", fa: "امضای خالق", en: "Creator signature", secret: true },
   { id: "golden-hunter", emoji: "🥚", fa: "شکار تخم‌مرغ طلایی", en: "Golden egg hunter", secret: true },
