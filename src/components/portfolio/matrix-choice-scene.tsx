@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { asciify } from "asciify-engine";
+import { DEFAULT_OPTIONS } from "asciify-engine";
 import { useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
+import { renderContainedAsciiImage } from "@/lib/ascii-image-renderer";
 
 const ERROR_ART = String.raw`
 ███████╗██████╗ ██████╗  ██████╗ ██████╗
@@ -32,22 +33,35 @@ const achieve = (id: string) => {
 
 function AsciiStill({ src, label, fontSize, className = "" }: { src: string; label: string; fontSize: number; className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let disposed = false;
-    let stop: (() => void) | undefined;
-    void asciify(src, canvasRef.current!, {
-      fontSize,
-      options: { colorMode: "matrix", charAspect: 0.55, normalize: true, contrast: 0.08 },
-    }).then((cleanup) => {
-      if (disposed) cleanup();
-      else stop = cleanup;
-    }).catch(() => undefined);
+    const image = new Image();
+    const render = () => {
+      if (disposed || !canvasRef.current || !hostRef.current) return;
+      renderContainedAsciiImage(image, canvasRef.current, hostRef.current, {
+        ...DEFAULT_OPTIONS,
+        fontSize,
+        colorMode: "fullcolor",
+        charAspect: 0.55,
+        normalize: true,
+        contrast: 0.08,
+      });
+    };
+    const observer = new ResizeObserver(render);
+    if (hostRef.current) observer.observe(hostRef.current);
+    image.src = src;
+    void image.decode().then(render).catch(() => undefined);
     return () => {
       disposed = true;
-      stop?.();
+      observer.disconnect();
     };
   }, [src, fontSize]);
-  return <canvas ref={canvasRef} className={`max-h-full max-w-full object-contain ${className}`} aria-label={label} />;
+  return (
+    <div ref={hostRef} className="grid h-full w-full place-items-center overflow-hidden">
+      <canvas ref={canvasRef} className={`block max-h-full max-w-full object-contain ${className}`} aria-label={label} />
+    </div>
+  );
 }
 
 export function MatrixChoiceScene({ pill, onChoose, onClose, lang }: { pill: "red" | "blue" | null; onChoose: (pill: "red" | "blue") => void; onClose: () => void; lang: "fa" | "en" }) {
@@ -121,14 +135,11 @@ export function MatrixChoiceScene({ pill, onChoose, onClose, lang }: { pill: "re
       </div>
       <div className="relative min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_center,rgba(20,100,45,.09),transparent_65%)] p-3" data-lenis-prevent>
         {!pill && (
-          <div className="mx-auto grid min-h-full max-w-6xl content-center items-center gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="grid max-h-[62vh] place-items-center overflow-hidden">
-              <AsciiStill src="/assets/morpheus-character.jpg" label="Morpheus in ASCII" fontSize={5} />
+          <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center gap-4">
+            <div className="h-[clamp(190px,34vh,420px)] w-full shrink-0">
+              <AsciiStill src="/assets/morpheus-pills.jpg" label="Morpheus hands offering red and blue pills in ASCII" fontSize={5} />
             </div>
             <div className="space-y-3 text-center">
-              <div className="mx-auto max-h-[22vh] max-w-xl overflow-hidden">
-                <AsciiStill src="/assets/morpheus.jpg" label="Morpheus offering red and blue pills in ASCII" fontSize={5} />
-              </div>
               <p className="text-sm leading-6">“This is your last chance. After this, there is no turning back.”</p>
               <p className="text-xs leading-5 text-[#75ff9c]/60">“You take the blue pill — the story ends, you wake up in your bed and believe whatever you want to believe.”</p>
               <p className="text-xs leading-5 text-[#75ff9c]/60">“You take the red pill — you stay in Wonderland and I show you how deep the rabbit hole goes.”</p>

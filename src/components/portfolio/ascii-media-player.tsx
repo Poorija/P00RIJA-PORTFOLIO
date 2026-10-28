@@ -1,8 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { asciifyVideo, DEFAULT_OPTIONS, imageToAsciiTextFrame, renderTextFrameToCanvas, snapshotAndDownload } from "asciify-engine";
+import { asciifyVideo, DEFAULT_OPTIONS, snapshotAndDownload } from "asciify-engine";
 import { FileUp, Pause, Play, X } from "lucide-react";
+import { renderContainedAsciiImage } from "@/lib/ascii-image-renderer";
+
+type AsciiColorMode = "matrix" | "fullcolor" | "grayscale";
+
+const optionsFor = (colorMode: AsciiColorMode) => ({
+  ...DEFAULT_OPTIONS,
+  fontSize: 7,
+  colorMode,
+  charAspect: 0.55,
+  normalize: true,
+  contrast: 0.08,
+});
 
 export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -13,7 +25,9 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
   const stopRef = useRef<(() => void) | null>(null);
   const disposedRef = useRef(false);
   const fileRef = useRef<File | null>(null);
-  const [colorMode, setColorMode] = useState<"matrix" | "fullcolor" | "grayscale">("matrix");
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const colorModeRef = useRef<AsciiColorMode>("matrix");
+  const [colorMode, setColorMode] = useState<AsciiColorMode>("matrix");
   const [kind, setKind] = useState<"image" | "video" | null>(null);
   const [fileName, setFileName] = useState("");
   const [ready, setReady] = useState(false);
@@ -24,6 +38,7 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
   const releaseMedia = () => {
     stopRef.current?.();
     stopRef.current = null;
+    imageRef.current = null;
     videoRef.current?.pause();
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     objectUrlRef.current = null;
@@ -34,6 +49,19 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
     releaseMedia();
   }, []);
 
+  useEffect(() => {
+    if (kind !== "image") return;
+    const host = hostRef.current;
+    if (!host) return;
+    const observer = new ResizeObserver(() => {
+      const image = imageRef.current;
+      const canvas = canvasRef.current;
+      if (image && canvas) renderContainedAsciiImage(image, canvas, host, optionsFor(colorModeRef.current));
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [kind]);
+
   const unlock = () => {
     try { window.dispatchEvent(new CustomEvent("achieve", { detail: "terminal-ascii" })); } catch { /* optional achievement */ }
   };
@@ -41,37 +69,35 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
   const loadFile = (file?: File, mode = colorMode) => {
     if (!file) return;
     fileRef.current = file;
+    colorModeRef.current = mode;
     releaseMedia();
     disposedRef.current = false;
     setReady(false);
     setError(false);
     setPaused(false);
+    setFileName(file.name);
     const isImage = file.type.startsWith("image/");
     const isVideo = file.type.startsWith("video/");
     if (!isImage && !isVideo) {
+      setKind(null);
       setError(true);
       return;
     }
     const url = URL.createObjectURL(file);
     objectUrlRef.current = url;
-    setFileName(file.name);
     setKind(isImage ? "image" : "video");
-    const options = { ...DEFAULT_OPTIONS, fontSize: 7, colorMode: mode, charAspect: 0.55, normalize: true, contrast: 0.08 };
+    const options = optionsFor(mode);
     void (async () => {
       try {
         if (isImage) {
           const image = new Image();
           image.src = url;
           await image.decode();
-          const canvas = canvasRef.current!;
-          const host = hostRef.current!;
-          const rect = host.getBoundingClientRect();
-          const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-          canvas.width = Math.max(1, Math.round(rect.width * dpr));
-          canvas.height = Math.max(1, Math.round(rect.height * dpr));
-          const frame = imageToAsciiTextFrame(image, options, canvas.width, canvas.height);
-          renderTextFrameToCanvas(canvas.getContext("2d")!, frame, options, canvas.width, canvas.height);
-          if (disposedRef.current || objectUrlRef.current !== url) return;
+          const canvas = canvasRef.current;
+          const host = hostRef.current;
+          if (disposedRef.current || objectUrlRef.current !== url || !canvas || !host) return;
+          imageRef.current = image;
+          if (!renderContainedAsciiImage(image, canvas, host, options)) throw new Error("Image rendering failed");
           setReady(true);
           unlock();
           return;
@@ -140,7 +166,7 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
             <button type="button" disabled={!ready} onClick={() => void snapshotAndDownload(canvasRef.current!, { filename: `ascii-${fileName || "art"}.png` })} className="ml-auto rounded border border-[#75ff9c]/25 px-2 py-1 hover:bg-[#75ff9c]/10 disabled:opacity-30">SAVE PNG</button>
           </div>
           <div ref={hostRef} className="grid min-h-0 flex-1 place-items-center overflow-hidden" data-lenis-prevent>
-            <canvas ref={canvasRef} className="h-full w-full object-contain" aria-label={fa ? "رندر ASCII رسانه" : "ASCII media rendering"} />
+            <canvas ref={canvasRef} className="block max-h-full max-w-full object-contain" aria-label={fa ? "رندر ASCII رسانه" : "ASCII media rendering"} />
             {!ready && !error && <p className="absolute font-mono text-xs">DECODING PIXELS…</p>}
           </div>
         </div>
