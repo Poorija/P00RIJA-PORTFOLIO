@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { asciify, asciifyVideo } from "asciify-engine";
+import { asciifyVideo, DEFAULT_OPTIONS, imageToAsciiTextFrame, renderTextFrameToCanvas, snapshotAndDownload } from "asciify-engine";
 import { FileUp, Pause, Play, X } from "lucide-react";
 
 export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose: () => void }) {
@@ -12,6 +12,8 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
   const objectUrlRef = useRef<string | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
   const disposedRef = useRef(false);
+  const fileRef = useRef<File | null>(null);
+  const [colorMode, setColorMode] = useState<"matrix" | "fullcolor" | "grayscale">("matrix");
   const [kind, setKind] = useState<"image" | "video" | null>(null);
   const [fileName, setFileName] = useState("");
   const [ready, setReady] = useState(false);
@@ -36,8 +38,9 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
     try { window.dispatchEvent(new CustomEvent("achieve", { detail: "terminal-ascii" })); } catch { /* optional achievement */ }
   };
 
-  const loadFile = (file?: File) => {
+  const loadFile = (file?: File, mode = colorMode) => {
     if (!file) return;
+    fileRef.current = file;
     releaseMedia();
     disposedRef.current = false;
     setReady(false);
@@ -53,13 +56,22 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
     objectUrlRef.current = url;
     setFileName(file.name);
     setKind(isImage ? "image" : "video");
-    const options = { colorMode: "matrix" as const, charAspect: 0.55, normalize: true, contrast: 0.08 };
+    const options = { ...DEFAULT_OPTIONS, fontSize: 7, colorMode: mode, charAspect: 0.55, normalize: true, contrast: 0.08 };
     void (async () => {
       try {
         if (isImage) {
-          const stop = await asciify(url, canvasRef.current!, { fontSize: 7, options });
-          if (disposedRef.current || objectUrlRef.current !== url) return stop();
-          stopRef.current = stop;
+          const image = new Image();
+          image.src = url;
+          await image.decode();
+          const canvas = canvasRef.current!;
+          const host = hostRef.current!;
+          const rect = host.getBoundingClientRect();
+          const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+          canvas.width = Math.max(1, Math.round(rect.width * dpr));
+          canvas.height = Math.max(1, Math.round(rect.height * dpr));
+          const frame = imageToAsciiTextFrame(image, options, canvas.width, canvas.height);
+          renderTextFrameToCanvas(canvas.getContext("2d")!, frame, options, canvas.width, canvas.height);
+          if (disposedRef.current || objectUrlRef.current !== url) return;
           setReady(true);
           unlock();
           return;
@@ -121,8 +133,14 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
             <button type="button" onClick={() => inputRef.current?.click()} className="ml-auto rounded border border-[#75ff9c]/20 px-2 py-1 text-[#75ff9c]">{fa ? "فایل دیگر" : "Replace"}</button>
             {kind === "video" && <button type="button" onClick={togglePlayback} className="grid size-7 place-items-center rounded border border-[#75ff9c]/20" aria-label={paused ? (fa ? "پخش" : "Play") : (fa ? "توقف" : "Pause")}>{paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}</button>}
           </div>
+          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-1 font-mono text-[8px]">
+            {(["matrix", "fullcolor", "grayscale"] as const).map((mode) => (
+              <button key={mode} type="button" onClick={() => { setColorMode(mode); loadFile(fileRef.current ?? undefined, mode); }} className={`rounded border px-2 py-1 ${colorMode === mode ? "border-[#75ff9c]/60 bg-[#75ff9c]/15" : "border-[#75ff9c]/15 hover:bg-[#75ff9c]/5"}`}>{mode === "matrix" ? "MATRIX" : mode === "fullcolor" ? "RGB" : "MONO"}</button>
+            ))}
+            <button type="button" disabled={!ready} onClick={() => void snapshotAndDownload(canvasRef.current!, { filename: `ascii-${fileName || "art"}.png` })} className="ml-auto rounded border border-[#75ff9c]/25 px-2 py-1 hover:bg-[#75ff9c]/10 disabled:opacity-30">SAVE PNG</button>
+          </div>
           <div ref={hostRef} className="grid min-h-0 flex-1 place-items-center overflow-hidden" data-lenis-prevent>
-            <canvas ref={canvasRef} className="max-h-full max-w-full object-contain" aria-label={fa ? "رندر ASCII رسانه" : "ASCII media rendering"} />
+            <canvas ref={canvasRef} className="h-full w-full object-contain" aria-label={fa ? "رندر ASCII رسانه" : "ASCII media rendering"} />
             {!ready && !error && <p className="absolute font-mono text-xs">DECODING PIXELS…</p>}
           </div>
         </div>
