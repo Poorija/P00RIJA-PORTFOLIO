@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
-import { Terminal as TerminalIcon } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Maximize2, Minimize2, Terminal as TerminalIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useContent } from "@/lib/content-store";
 import { openGameCenter } from "./game-center";
 import { AsciiMediaPlayer } from "./ascii-media-player";
 import { MatrixChoiceScene } from "./matrix-choice-scene";
 import { CreativeLab, type LabExperiment } from "./creative-lab";
+import { CREATIVE_COMMANDS } from "./creative-commands";
 
 /* ============================================================
  * InteractiveTerminal — a simulated secure shell that boots
@@ -127,30 +129,6 @@ const FORTUNES = [
 const EIGHTBALL = [
   "It is certain.", "Without a doubt.", "Most likely.", "Ask again later.",
   "Better not tell you now.", "Don't count on it.", "Very doubtful.", "Signs point to yes.",
-];
-
-const AQUARIUM_FRAMES = [
-  [
-    "     ><(((('>        .      ><(((('>       ",
-    "  .        __/___             .            ",
-    "       ___/_____/\\___     ><(((('>        ",
-    " ~~~~~ \\           / ~~~~~~~~~~~~~~~~~~~~~ ",
-    "        \\_________/       bubbles: o O o   ",
-  ],
-  [
-    "          ><(((('>      .        ><(((('>  ",
-    "  .        __/___             .            ",
-    "       ___/_____/\\___             ><(((('> ",
-    " ~~~~~ \\           / ~~~~~~~~~~~~~~~~~~~~~ ",
-    "        \\_________/     bubbles: O o o     ",
-  ],
-  [
-    "  ><(((('>          .          ><(((('>    ",
-    "       .    __/___                         ",
-    "       ___/_____/\\___      ><(((('>        ",
-    " ~~~~~ \\           / ~~~~~~~~~~~~~~~~~~~~~ ",
-    "        \\_________/   bubbles: o o O       ",
-  ],
 ];
 
 const SL_ART = [
@@ -950,14 +928,17 @@ const COMMANDS: CommandDef[] = [
     },
   },
   {
-    name: "asciiquarium", desc: "animated terminal aquarium",
-    run: async ({ push, pushMany, isAlive }) => {
-      for (let i = 0; i < 12; i++) {
-        if (!isAlive()) return;
-        pushMany("success", AQUARIUM_FRAMES[i % AQUARIUM_FRAMES.length]);
-        await sleep(220);
-      }
-      push("muted", "> the tiny aquarium is now in stealth mode");
+    name: "asciiquarium", desc: "open the interactive aquarium in Creative Lab",
+    run: ({ openScene, push }) => {
+      push("success", "> opening the interactive aquarium…");
+      openScene("lab", "aquarium");
+    },
+  },
+  {
+    name: "camp", desc: "visit the animated forest campfire",
+    run: ({ openScene, push }) => {
+      push("success", "> entering the forest campsite…");
+      openScene("lab", "camp");
     },
   },
   {
@@ -1029,10 +1010,11 @@ const COMMANDS: CommandDef[] = [
       openScene("media");
     },
   },
+  ...CREATIVE_COMMANDS,
   {
-    name: "lab", desc: "open ten interactive creative experiments",
+    name: "lab", desc: "open twelve interactive creative experiments",
     run: ({ openScene, push }) => {
-      push("success", "> creative lab online: 10 local experiments, zero server load.");
+      push("success", "> creative lab online: 12 local experiments, zero server load.");
       openScene("lab", "starfield");
     },
   },
@@ -1079,6 +1061,13 @@ const COMMANDS: CommandDef[] = [
     run: ({ resize, arg, push }) => {
       resize(arg || "normal");
       push("muted", `> window geometry: ${arg || "normal"}`);
+    },
+  },
+  {
+    name: "fullscreen", desc: "expand the terminal across the entire viewport",
+    run: ({ resize, push }) => {
+      resize("full");
+      push("success", "> fullscreen enabled. Use `resize normal` or the minimize button to return.");
     },
   },
   {
@@ -1167,6 +1156,7 @@ export function InteractiveTerminal() {
   const [labExperiment, setLabExperiment] = useState<LabExperiment>("starfield");
   const [questStage, setQuestStage] = useState(0);
   const [terminalSize, setTerminalSize] = useState<{ width: number | null; height: number }>({ width: null, height: 300 });
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const outRef = useRef<HTMLDivElement>(null);
@@ -1208,12 +1198,21 @@ export function InteractiveTerminal() {
   }, [asciiScene, pushLine]);
 
   const resizeTerminal = useCallback((preset: string) => {
-    const height = window.innerHeight;
+    setIsFullScreen(preset === "full");
     if (preset === "compact") setTerminalSize({ width: 540, height: 260 });
     else if (preset === "large") setTerminalSize({ width: 1040, height: 540 });
-    else if (preset === "full") setTerminalSize({ width: null, height: Math.min(760, Math.max(420, height - 140)) });
+    else if (preset === "full") setTerminalSize({ width: null, height: window.innerHeight });
     else setTerminalSize({ width: null, height: 340 });
   }, []);
+
+  const toggleFullScreen = useCallback(() => setIsFullScreen((value) => !value), []);
+
+  useEffect(() => {
+    if (!isFullScreen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [isFullScreen]);
 
   const runQuest = useCallback((action: "start" | "solve", answer = "") => {
     const clues = [
@@ -1548,12 +1547,12 @@ export function InteractiveTerminal() {
 
   /* ---- render --------------------------------------------- */
 
-  return (
+  const terminal = (
     <div
       ref={terminalRef}
       data-interactive-terminal
-      className="relative mx-auto flex flex-col overflow-hidden rounded-2xl border border-border bg-[oklch(0.1_0.02_165/0.92)] backdrop-blur"
-      style={{ boxShadow: "0 0 60px -20px var(--sec-glow)", width: terminalSize.width ?? "100%", height: terminalSize.height, maxWidth: "100%" }}
+      className={isFullScreen ? "fixed inset-0 z-[240] flex flex-col overflow-hidden border-0 bg-[#010504]" : "relative mx-auto flex flex-col overflow-hidden rounded-2xl border border-border bg-[oklch(0.1_0.02_165/0.92)] backdrop-blur"}
+      style={isFullScreen ? { width: "100vw", height: "100dvh", maxWidth: "none" } : { boxShadow: "0 0 60px -20px var(--sec-glow)", width: terminalSize.width ?? "100%", height: terminalSize.height, maxWidth: "100%" }}
       onClick={() => inputRef.current?.focus()}
     >
       <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2.5">
@@ -1564,6 +1563,9 @@ export function InteractiveTerminal() {
           <TerminalIcon className="h-3 w-3" />
           root@portfolio:~ · {commandCount} cmds · TAB
         </span>
+        <button type="button" onClick={(event) => { event.stopPropagation(); toggleFullScreen(); }} className="grid size-7 place-items-center rounded border border-white/10 text-white/50 hover:bg-white/5 hover:text-white" aria-label={isFullScreen ? "Exit fullscreen" : "Enter fullscreen"} title={isFullScreen ? "Exit fullscreen" : "Enter fullscreen"}>
+          {isFullScreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+        </button>
       </div>
 
       <div
@@ -1637,6 +1639,8 @@ export function InteractiveTerminal() {
       </div>
     </div>
   );
+
+  return isFullScreen && typeof document !== "undefined" ? createPortal(terminal, document.body) : terminal;
 }
 
 /* --- line renderer ----------------------------------------- */

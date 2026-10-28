@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { asciifyVideo, asciifyWebcam, DEFAULT_OPTIONS, snapshotAndDownload } from "asciify-engine";
+import { asciifyVideo, DEFAULT_OPTIONS, imageToAsciiFrame, renderFrameToCanvas, snapshotAndDownload } from "asciify-engine";
 import { Camera, CameraOff, FileUp, Pause, Play, X } from "lucide-react";
 import { renderContainedAsciiImage } from "@/lib/ascii-image-renderer";
 
@@ -24,6 +24,7 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const disposedRef = useRef(false);
   const fileRef = useRef<File | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -39,13 +40,15 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
   const fa = lang === "fa";
 
   const mediaError = fa ? "این فایل یا فرمت رسانه قابل خواندن نیست." : "This media file or format cannot be decoded.";
-  const cameraError = fa ? "دسترسی به دوربین داده نشد یا دوربین در دسترس نیست." : "Camera permission was denied or no camera is available.";
 
   const releaseMedia = () => {
     stopRef.current?.();
     stopRef.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
     imageRef.current = null;
     videoRef.current?.pause();
+    if (videoRef.current) videoRef.current.srcObject = null;
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     objectUrlRef.current = null;
   };
@@ -72,8 +75,13 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
     if (kind !== "camera") return;
     const canvas = canvasRef.current;
     const host = hostRef.current;
-    if (!canvas || !host) return;
+    const video = videoRef.current;
+    if (!canvas || !host || !video) return;
     let cancelled = false;
+    let raf = 0;
+    let stream: MediaStream | null = null;
+    const context = canvas.getContext("2d");
+    if (!context) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const resize = () => {
       const rect = host.getBoundingClientRect();
@@ -81,41 +89,78 @@ export function AsciiMediaPlayer({ lang, onClose }: { lang: "fa" | "en"; onClose
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
       canvas.style.width = "100%";
       canvas.style.height = "100%";
-      canvas.getContext("2d")?.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(host);
+    const describeError = (reason: unknown) => {
+      const name = reason instanceof DOMException ? reason.name : "Error";
+      if (name === "NotAllowedError" || name === "SecurityError") return fa ? `دسترسی دوربین در مرورگر مسدود است. اجازه دسترسی را فعال کنید. (${name})` : `Camera access is blocked. Allow camera permission in the browser. (${name})`;
+      if (name === "NotFoundError" || name === "DevicesNotFoundError") return fa ? "هیچ دوربینی روی این دستگاه پیدا نشد." : "No camera was found on this device.";
+      if (name === "NotReadableError" || name === "TrackStartError") return fa ? "دوربین در برنامه دیگری در حال استفاده است یا قابل خواندن نیست." : "The camera is busy or cannot be read.";
+      const detail = reason instanceof Error ? reason.message : String(reason);
+      return fa ? `رندر دوربین ممکن نشد: ${detail}` : `Camera rendering failed: ${detail}`;
+    };
     void (async () => {
       try {
-        const stop = await asciifyWebcam(canvas, {
-          fontSize: optionsFor(colorModeRef.current, densityRef.current).fontSize,
-          mirror: true,
-          dpr,
-          options: optionsFor(colorModeRef.current, densityRef.current),
-          liveOptions: () => optionsFor(colorModeRef.current, densityRef.current),
-        });
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("getUserMedia is unavailable in this browser");
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 540 } }, audio: false });
+        } catch (reason) {
+          if (reason instanceof DOMException && (reason.name === "NotAllowedError" || reason.name === "SecurityError")) throw reason;
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
         if (cancelled) {
-          stop();
+          stream.getTracks().forEach((track) => track.stop());
           return;
         }
-        stopRef.current = stop;
-        setReady(true);
-        try { window.dispatchEvent(new CustomEvent("achieve", { detail: "terminal-ascii" })); } catch { /* optional achievement */ }
-      } catch {
+        streamRef.current = stream;
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        await video.play();
+        let previous = 0;
+        let announced = false;
+        const render = (now: number) => {
+          if (cancelled) return;
+          raf = requestAnimationFrame(render);
+          if (now - previous < 1000 / 15 || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+          previous = now;
+          const width = canvas.width / dpr;
+          const height = canvas.height / dpr;
+          const options = optionsFor(colorModeRef.current, densityRef.current);
+          const { frame } = imageToAsciiFrame(video, options, width, height);
+          context.save();
+          context.translate(width, 0);
+          context.scale(-1, 1);
+          renderFrameToCanvas(context, frame, options, width, height);
+          context.restore();
+          if (!announced) {
+            announced = true;
+            setReady(true);
+            try { window.dispatchEvent(new CustomEvent("achieve", { detail: "terminal-ascii" })); } catch { /* optional achievement */ }
+          }
+        };
+        raf = requestAnimationFrame(render);
+      } catch (reason) {
+        stream?.getTracks().forEach((track) => track.stop());
+        if (streamRef.current === stream) streamRef.current = null;
         if (!cancelled) {
-          setError(cameraError);
+          setError(describeError(reason));
           setKind(null);
         }
       }
     })();
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf);
       observer.disconnect();
-      stopRef.current?.();
-      stopRef.current = null;
+      stream?.getTracks().forEach((track) => track.stop());
+      if (streamRef.current === stream) streamRef.current = null;
+      if (video.srcObject === stream) video.srcObject = null;
     };
-  }, [kind, cameraError]);
+  }, [kind, fa]);
 
   const unlock = () => {
     try { window.dispatchEvent(new CustomEvent("achieve", { detail: "terminal-ascii" })); } catch { /* optional achievement */ }

@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pause, Play, RotateCcw, Shuffle, X } from "lucide-react";
+import { AquariumExperiment, CampfireExperiment } from "./lab-nature-scenes";
 
-export type LabExperiment = "starfield" | "plasma" | "fractal" | "life" | "particles" | "harmonograph" | "fire" | "maze" | "synth" | "typing";
+export type LabExperiment = "starfield" | "plasma" | "fractal" | "life" | "particles" | "harmonograph" | "fire" | "maze" | "synth" | "typing" | "aquarium" | "camp";
 
 const EXPERIMENTS: { id: LabExperiment; label: string; hint: string }[] = [
   { id: "starfield", label: "STARFIELD", hint: "Move the pointer to steer the warp field" },
@@ -17,6 +18,8 @@ const EXPERIMENTS: { id: LabExperiment; label: string; hint: string }[] = [
   { id: "maze", label: "MAZE", hint: "Reach the cyan exit with WASD, arrows, or touch" },
   { id: "synth", label: "SYNTH", hint: "Build an eight-step loop; audio starts only on Play" },
   { id: "typing", label: "TYPING", hint: "Measure words per minute and typing accuracy" },
+  { id: "aquarium", label: "AQUARIUM", hint: "Fish, drifting bubbles, and click-made bubble bursts" },
+  { id: "camp", label: "CAMPFIRE", hint: "A forest campsite, six campers, twinkling stars, and shooting stars" },
 ];
 
 export function CreativeLab({ initialExperiment, onClose }: { initialExperiment: LabExperiment; onClose: () => void }) {
@@ -26,7 +29,7 @@ export function CreativeLab({ initialExperiment, onClose }: { initialExperiment:
     <div data-creative-lab className="absolute inset-0 z-40 flex min-h-0 flex-col bg-[#010504] p-3 font-mono text-[#75ff9c]" dir="ltr" onClick={(event) => event.stopPropagation()}>
       <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-[#75ff9c]/15 pb-2 text-[10px]">
         <span>CREATIVE://LOCAL_LAB</span>
-        <span className="hidden text-[#75ff9c]/35 sm:inline">10 EXPERIMENTS · ZERO SERVER LOAD</span>
+        <span className="hidden text-[#75ff9c]/35 sm:inline">{EXPERIMENTS.length} EXPERIMENTS · ZERO SERVER LOAD</span>
         <button type="button" onClick={onClose} className="ml-auto grid size-8 place-items-center rounded border border-[#75ff9c]/20 hover:bg-[#75ff9c]/10" aria-label="Close creative lab"><X className="size-4" /></button>
       </div>
       <div className="mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1" data-lenis-prevent>
@@ -45,6 +48,8 @@ export function CreativeLab({ initialExperiment, onClose }: { initialExperiment:
         {active === "maze" && <MazeExperiment />}
         {active === "synth" && <SynthExperiment />}
         {active === "typing" && <TypingExperiment />}
+        {active === "aquarium" && <AquariumExperiment />}
+        {active === "camp" && <CampfireExperiment />}
       </div>
     </div>
   );
