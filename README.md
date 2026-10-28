@@ -12,7 +12,7 @@
 [![Node](https://img.shields.io/badge/Node-24-339933?logo=nodedotjs)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-commercial-important)](LICENSE-COMMERCIAL.md)
 
-`v4.5.2` · Next.js 16 (App Router · Turbopack · standalone) · React 19 · Tailwind 4 · Prisma 6/SQLite · Three.js · Lenis — **tested with 1 CPU / 512 MB RAM (about 101 MB idle runtime)** · Developer: [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com)
+`v4.6.0` · Next.js 16 (App Router · Turbopack · standalone) · React 19 · Tailwind 4 · Prisma 6/SQLite · Three.js · Lenis — **tested with 1 CPU / 512 MB RAM (about 101 MB idle runtime)** · Developer: [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com)
 
 </div>
 
@@ -33,7 +33,8 @@ A single-page, space-themed portfolio with a full built-in CMS. Three orbiting w
 - 🖼 **Cinematic virtual galleries** — per-project media, specs and multi-links; a gallery can be added to **any** section
 - 🔐 **Access Guard** — password-protect the **whole site**, any **section**, or **each gallery independently**: 4/6-digit PIN or text password, **temporary passwords with auto-expiry**, attempt-limited locks (bank-card style disable), server-side content withholding, `/gate` site-wide screen
 - 🎮 **Galaxy Arcade** — 26 built-in games in a console-style overlay (header button or `G`), per-game high scores, RTL-safe controls
-- 💻 **Interactive security terminal** — ~70 commands, TAB completion, local-only ASCII image/video rendering with aspect-safe MATRIX/RGB/MONO output and PNG export, plus the `chose` Matrix pill scene with a high-resolution two-handed Morpheus frame
+- 💻 **Interactive security terminal** — ~80 commands, TAB completion, local-only ASCII image/video rendering with 10 density levels, MATRIX/RGB/MONO output and PNG export, plus permission-based live webcam ASCII with full track cleanup and the `chose` Matrix pill scene
+- 🧪 **Creative Lab** — ten browser-local interactive experiments: warp Starfield, procedural Plasma, zoomable Mandelbrot, Conway Life, gravity Particles, Harmonograph, ASCII Fire, generated Maze, Web Audio Synth, and Typing Test; open with `lab` or each experiment's own terminal command
 - 📊 **First-party visitor analytics** — sessions, duration, IP & Geo-IP, browser/device, referrers, 30-day charts, live world map; cookie-free, Do-Not-Track aware, **nothing tracked before consent**
 - 🛡 **Defense Center** — bot/scanner filtering, rate limiting, auto-bans, allow/block lists, live threat feed (Next 16 `proxy.ts`)
 - 🧩 **Full CMS** — every section, theme, gallery layouts, drag-drop forms (Telegram/WhatsApp/SMTP delivery), music player, 3D object factory, per-device content snapshots, SEO fields, media library with ffmpeg-backed editing
@@ -86,7 +87,8 @@ bash scripts/deploy-image.sh user@your-server   # load + restart + health check
 - 🖼 **گالری‌های مجازی سینمایی** — رسانه، مشخصات و چند لینک برای هر پروژه؛ افزودن گالری به **هر بخش دلخواه**
 - 🔐 **قفل رمز (Access Guard)** — پسورد روی **کل سایت**، هر **بخش** یا **هر گالری به‌صورت مستقل**: رمز ۴/۶ رقمی یا متنی، **رمز موقت با انقضای خودکار**، حالت سقف تلاش (غیرفعال‌شدن مثل کارت بانکی)، حذف محتوای واقعی از سمت سرور تا وارد کردن رمز، صفحه‌ی `/gate` برای قفل کل سایت
 - 🎮 **مرکز بازی (Galaxy Arcade)** — ۲۶ بازی داخلی در اورلی کنسولی (دکمه‌ی هدر یا کلید `G`)، رکورد شخصی برای هر بازی، سازگار با راست‌به‌چپ
-- 💻 **ترمینال امنیت تعاملی** — حدود ۷۰ دستور با تکمیل TAB، رندر محلی ASCII از تصویر/ویدیو با حفظ نسبت تصویر، حالت‌های MATRIX/RGB/MONO و خروجی PNG؛ صحنه `chose` با تصویر باکیفیت از دو دست مورفیئوس و قرص‌ها
+- 💻 **ترمینال امنیت تعاملی** — حدود ۸۰ دستور با تکمیل TAB، رندر محلی ASCII از تصویر/ویدیو با ۱۰ سطح Density، حالت‌های MATRIX/RGB/MONO و خروجی PNG؛ وب‌کم زنده با اجازه کاربر و توقف کامل trackها، به‌همراه صحنه `chose`
+- 🧪 **آزمایشگاه خلاقیت** — ده تجربه تعاملی و کاملاً محلی: Starfield، Plasma، Mandelbrot با zoom، Conway Life، Particles، Harmonograph، ASCII Fire، Maze تصادفی، Synth با Web Audio و Typing Test؛ اجرا با `lab` یا نام هر تجربه در ترمینال
 - 📊 **آمار بازدیدکننده‌ی اختصاصی** — نشست‌ها، مدت حضور، موقعیت جغرافیایی، مرورگر/دستگاه، نمودار ۳۰ روزه، نقشه‌ی زنده؛ بدون کوکی، با احترام به Do-Not-Track و **بدون ثبت هیچ داده‌ای قبل از رضایت**
 - 🛡 **مرکز سد دفاعی** — بلاک ربات/اسکنر، محدودیت نرخ، بن خودکار، فهرست‌های بلاک/مجاز، فید زنده تهدیدها
 - 🧩 **CMS کامل** — سکشن‌ها، تم، چیدمان گالری، فرم‌ساز کشیدنی (تحویل تلگرام/واتساپ/SMTP)، پخش‌کننده موسیقی، کارخانه شیء سه‌بعدی، محتوای تفکیک‌شده برای هر دستگاه، سئو، کتابخانه رسانه با ویرایش ffmpeg

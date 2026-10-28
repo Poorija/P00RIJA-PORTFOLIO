@@ -8,6 +8,7 @@ import { useContent } from "@/lib/content-store";
 import { openGameCenter } from "./game-center";
 import { AsciiMediaPlayer } from "./ascii-media-player";
 import { MatrixChoiceScene } from "./matrix-choice-scene";
+import { CreativeLab, type LabExperiment } from "./creative-lab";
 
 /* ============================================================
  * InteractiveTerminal — a simulated secure shell that boots
@@ -331,7 +332,7 @@ interface Ctx {
   pushMany: (kind: LineKind, texts: string[]) => void;
   isAlive: () => boolean;
   history: string[];
-  openScene: (scene: "media" | "matrix") => void;
+  openScene: (scene: "media" | "matrix" | "lab", experiment?: LabExperiment) => void;
   choosePill: (pill: "red" | "blue") => void;
   resize: (preset: string) => void;
   quest: (action: "start" | "solve", answer?: string) => void;
@@ -1022,12 +1023,38 @@ const COMMANDS: CommandDef[] = [
     ]),
   },
   {
-    name: "ascii", desc: "render a local image or video as ASCII",
+    name: "ascii", desc: "render images, video, or a live camera with density control",
     run: ({ openScene, push }) => {
-      push("success", "> ASCII decoder ready. Select a local image or video; nothing is uploaded.");
+      push("success", "> ASCII decoder ready. Media and camera frames stay in your browser.");
       openScene("media");
     },
   },
+  {
+    name: "lab", desc: "open ten interactive creative experiments",
+    run: ({ openScene, push }) => {
+      push("success", "> creative lab online: 10 local experiments, zero server load.");
+      openScene("lab", "starfield");
+    },
+  },
+  ...([
+    ["starfield", "fly through an interactive warp starfield"],
+    ["plasma", "generate a flowing procedural aurora"],
+    ["fractal", "explore a zoomable Mandelbrot fractal"],
+    ["life", "play Conway's Game of Life"],
+    ["particles", "attract and repel a particle field"],
+    ["harmonograph", "draw animated Lissajous curves"],
+    ["fire", "run an ASCII fire simulation"],
+    ["maze", "solve a newly generated maze"],
+    ["synth", "play an eight-step Web Audio sequencer"],
+    ["typing", "measure typing speed and accuracy"],
+  ] satisfies [LabExperiment, string][]).map(([experiment, desc]): CommandDef => ({
+    name: experiment,
+    desc,
+    run: ({ openScene, push }) => {
+      push("success", `> launching ${experiment} in the creative lab…`);
+      openScene("lab", experiment);
+    },
+  })),
   {
     name: "chose", desc: "Morpheus offers the blue or red pill",
     run: ({ openScene, push }) => {
@@ -1135,8 +1162,9 @@ export function InteractiveTerminal() {
   const [cwd, setCwd] = useState(HOME_DIR);
   const [busy, setBusy] = useState(true);
   const [tabHint, setTabHint] = useState<string | null>(null);
-  const [asciiScene, setAsciiScene] = useState<"media" | "matrix" | null>(null);
+  const [asciiScene, setAsciiScene] = useState<"media" | "matrix" | "lab" | null>(null);
   const [matrixPill, setMatrixPill] = useState<"red" | "blue" | null>(null);
+  const [labExperiment, setLabExperiment] = useState<LabExperiment>("starfield");
   const [questStage, setQuestStage] = useState(0);
   const [terminalSize, setTerminalSize] = useState<{ width: number | null; height: number }>({ width: null, height: 300 });
 
@@ -1165,8 +1193,9 @@ export function InteractiveTerminal() {
 
   const clearLines = useCallback(() => setLines([]), []);
 
-  const openScene = useCallback((scene: "media" | "matrix") => {
+  const openScene = useCallback((scene: "media" | "matrix" | "lab", experiment: LabExperiment = "starfield") => {
     setMatrixPill(null);
+    setLabExperiment(experiment);
     setAsciiScene(scene);
   }, []);
 
@@ -1591,6 +1620,7 @@ export function InteractiveTerminal() {
       </div>
       {asciiScene === "media" && <AsciiMediaPlayer lang={lang} onClose={() => setAsciiScene(null)} />}
       {asciiScene === "matrix" && <MatrixChoiceScene lang={lang} pill={matrixPill} onChoose={setMatrixPill} onClose={() => { setAsciiScene(null); setMatrixPill(null); }} />}
+      {asciiScene === "lab" && <CreativeLab initialExperiment={labExperiment} onClose={() => setAsciiScene(null)} />}
       <div
         role="separator"
         aria-orientation="horizontal"
