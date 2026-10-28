@@ -14,19 +14,19 @@ Subject to payment and to the terms of a valid, digitally-signed license file
 may install and run the Software on the number of separate
 servers/instances/devices ("Slots") and for the duration stated in the
 License File. Each install receives a unique device UUID which is reported to
-the Vendor's license server; Slots are counted per activated install.
+the Vendor's licensing service; Slots are counted per activated install.
 
 License terms (duration, Slots, usage counters, features) are defined
-exclusively by the License File and the license-server record and may be
+exclusively by the License File and the vendor's license record and may be
 extended, modified, suspended or revoked by the Vendor at the Licensee's
 request or upon breach.
 
 ## 2. License enforcement
 
 The Software periodically validates its License File — including against the
-license-server address embedded in the License File. If validation fails
+licensing endpoint embedded in the License File. If validation fails
 (expiration, revocation, suspension, exhausted usage, exhausted Slots, or the
-license server rejecting the install), the Software switches to a restricted
+licensing service rejecting the install), the Software switches to a restricted
 maintenance state until the license becomes valid again. Tampering with,
 circumventing, or disabling these mechanisms is a material breach.
 
@@ -52,7 +52,7 @@ interest in the Software, including all intellectual-property rights.
 License validation transmits only technical data: the license identifier, the
 install's device UUID, the number of served visitor sessions, and standard
 connection metadata. No site content and no visitor personal data are sent to
-the license server.
+the licensing service.
 
 ## 6. Warranty & liability
 

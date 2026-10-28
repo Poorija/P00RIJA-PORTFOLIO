@@ -12,7 +12,7 @@
 //   }
 //
 // The payload (decrypted) carries EVERYTHING the install needs to reach the
-// license server — host, port, heartbeat cadence — plus the commercial terms:
+// licensing endpoint — host, port, heartbeat cadence — plus the commercial terms:
 //   { licenseId, licensee, plan, issuedAt, expiresAt, deviceLimit,
 //     usageLimit, features[], server:{url, port, heartbeatMinutes}, notes }
 //
@@ -24,7 +24,7 @@
 // Each install generates a persistent UUID (deviceId) on first activation;
 // multi-server licenses count DISTINCT deviceIds against deviceLimit, and
 // every heartbeat reports usage so the owner can manage everything manually
-// from the license-server dashboard.
+// from the vendor side.
 //
 // Enforcement is enabled ONLY when LICENSE_AES_KEY + LICENSE_SIGN_PUBKEY are
 // set — dev environments and the free public image simply run unlocked.
@@ -35,7 +35,7 @@ import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { startHeartbeatLoop } from "@/lib/license-heartbeat";
 
-export interface LicenseServerConfig {
+export interface LicenseEndpointConfig {
   url: string; // e.g. "http://licenses.example.com"
   port: number; // e.g. 7800
   heartbeatMinutes?: number;
@@ -50,7 +50,7 @@ export interface LicensePayload {
   deviceLimit: number;
   usageLimit: number | null; // null = unlimited
   features: string[];
-  server: LicenseServerConfig;
+  server: LicenseEndpointConfig;
   notes?: string;
 }
 
@@ -161,7 +161,7 @@ function edHelpers() {
 // every heartbeat re-verifies the Ed25519 signature over env.ct with the
 // embedded vendor public key, re-decrypts it, and requires the commercial
 // terms in `data` to match the decrypted original exactly. Only `server`
-// may drift (the license server can push a new endpoint). Anything else —
+// may drift (the vendor can push a new endpoint). Anything else —
 // direct SQLite edits, crafted rows, an expired license rewritten to
 // perpetual — fails verification and the install locks.
 
@@ -282,14 +282,14 @@ export async function activateLicense(rawFile: string): Promise<LicensePayload> 
   const deviceId = await getOrCreateDeviceId();
   if (payload.licenseId === "__device__") throw new Error("Invalid license id.");
 
-  // Register on the license server (slots are counted server-side).
+  // Register with the licensing service (slots are counted server-side).
   const server = resolveServer(payload.server);
   const reg = await postJson(new URL("/v1/activate", server), {
     licenseId: payload.licenseId,
     deviceId,
   });
   if (!reg.ok) {
-    throw new Error(reg.body?.error || `Activation rejected by the license server (HTTP ${reg.status}).`);
+    throw new Error(reg.body?.error || `Activation rejected by the licensing service (HTTP ${reg.status}).`);
   }
 
   const envelopeSig = extractSig(rawFile);
@@ -339,21 +339,21 @@ function extractSig(raw: string): string {
   }
 }
 
-function resolveServer(cfg: LicenseServerConfig): URL {
+function resolveServer(cfg: LicenseEndpointConfig): URL {
   const override = process.env.LICENSE_SERVER_URL?.trim();
   const base = override || cfg.url;
   const port = override ? "" : cfg.port ? `:${cfg.port}` : "";
   const url = new URL(`${base.replace(/\/+$/, "")}${port}`);
-  assertPublicLicenseServer(url);
+  assertPublicLicenseEndpoint(url);
   return url;
 }
 
-// ── SSRF guard for the license-server URL ────────────────────────────────────
+// ── SSRF guard for the licensing endpoint URL ────────────────────────────────
 // The URL arrives inside the license file, so before this process contacts it
 // we require a public http(s) target. The license file is vendor-signed, so
 // this is defense-in-depth (e.g. a compromised/leaked AES key must not turn
 // activations into an internal-network port scan). Self-hosters who actually
-// run the license server on a LAN/private address can opt out explicitly with
+// run the licensing endpoint on a LAN/private address can opt out explicitly with
 // LICENSE_ALLOW_PRIVATE_SERVERS=1.
 const BLOCKED_HOST_PATTERNS = [/^localhost$/i, /\.local$/i, /\.internal$/i, /\.localhost$/i];
 
@@ -377,15 +377,15 @@ function isPrivateLiteralIp(host: string): boolean {
   return false;
 }
 
-function assertPublicLicenseServer(url: URL): void {
+function assertPublicLicenseEndpoint(url: URL): void {
   if (process.env.LICENSE_ALLOW_PRIVATE_SERVERS === "1") return;
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error(`License server URL must use http(s), got "${url.protocol}".`);
+    throw new Error(`License endpoint URL must use http(s), got "${url.protocol}".`);
   }
   const host = url.hostname.trim();
   if (isPrivateLiteralIp(host) || BLOCKED_HOST_PATTERNS.some((re) => re.test(host))) {
     throw new Error(
-      "License server URL points at a private/internal address. Use a public hostname/IP, or set LICENSE_ALLOW_PRIVATE_SERVERS=1 if your license server really is on this network."
+      "License endpoint URL points at a private/internal address. Use a public hostname/IP, or set LICENSE_ALLOW_PRIVATE_SERVERS=1 if your licensing endpoint really is on this network."
     );
   }
 }
@@ -409,7 +409,7 @@ async function postJson(url: URL, body: unknown): Promise<{ ok: boolean; status:
 // ── heartbeat (runs every N minutes from instrumentation.ts) ────────────────
 
 /**
- * One heartbeat tick: reports this install to the license server and updates
+ * One heartbeat tick: reports this install to the licensing service and updates
  * the local gate state. Returns the phase after the tick.
  *  - revoked / expired / not found / over slots / over usage → maintenance (immediately)
  *  - network failure → increment failCount; after LICENSE_GRACE_CHECKS → maintenance
@@ -438,7 +438,7 @@ export async function heartbeatTick(): Promise<LicenseGateState> {
   }
   const { env, data: payload } = verdict;
 
-  // Local expiry check works even when the license server is unreachable.
+  // Local expiry check works even when the licensing service is unreachable.
   const expiresAt = payload.expiresAt ? new Date(payload.expiresAt).getTime() : null;
   if (expiresAt && expiresAt < Date.now()) {
     await db.licenseActivation.update({
@@ -449,7 +449,7 @@ export async function heartbeatTick(): Promise<LicenseGateState> {
     return { ...gate, phase: "maintenance", reason: "License expired." };
   }
 
-  // Report usage: the license server keeps the cumulative count (it decides
+  // Report usage: the licensing service keeps the cumulative count (it decides
   // against usageLimit); we just send the total served sessions so far.
   const totalSessions = await db.visitSession.count();
 
@@ -462,7 +462,7 @@ export async function heartbeatTick(): Promise<LicenseGateState> {
 
   if (res.ok && res.body?.ok) {
     const usage = Number(res.body.usageCount ?? 0);
-    // Domain push: the license server may tell this install to use a new
+    // Domain push: the licensing service may tell this install to use a new
     // URL from now on (owner changes the domain in the dashboard). Persist
     // it into the stored payload so future checks go straight there.
     const pushed = typeof res.body.server === "string" ? (res.body.server as string).trim() : "";
@@ -475,7 +475,7 @@ export async function heartbeatTick(): Promise<LicenseGateState> {
             url: `${next.protocol}//${next.hostname}`,
             port: next.port ? Number(next.port) : next.protocol === "https:" ? 443 : 80,
           };
-          console.log(`[p00rija-license] server domain updated by license server → ${pushed}`);
+          console.log(`[p00rija-license] licensing endpoint updated by vendor push → ${pushed}`);
         }
       } catch {
         // malformed push — ignore and keep the current server
@@ -517,7 +517,7 @@ export async function heartbeatTick(): Promise<LicenseGateState> {
     data: {
       failCount,
       status: locked ? "maintenance" : row.status,
-      lastServerMessage: locked ? "license server unreachable" : "license server unreachable (grace)",
+      lastServerMessage: locked ? "licensing service unreachable" : "licensing service unreachable (grace)",
       lastHeartbeatAt: new Date(),
     },
   });

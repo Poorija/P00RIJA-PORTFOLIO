@@ -2,7 +2,7 @@
 
 تاریخ ممیزی: ۲۰۲۶-۱۰-۲۳  
 نسخهٔ کد: `3.3.1` (`src/lib/app-version.ts`، تاریخ بیلد `2026-10-22`)  
-دامنه: کل سورس اجرایی (`src/`، `prisma/`، `docker/`، `license-server/`، `scripts/`) به‌اضافهٔ پیکربندی بیلد و دیپلوی.  
+دامنه: کل سورس اجرایی (`src/`، `prisma/`، `docker/`، `scripts/`) به‌اضافهٔ پیکربندی بیلد و دیپلوی.  
 `dist/`، `node_modules/` و `.mimosa/` سورس زنده نیستند و فقط جایی که ریسک واقعی می‌سازند ذکر شده‌اند.
 
 این سند دو کار را با هم انجام می‌دهد: نقشهٔ ساختار و کارکرد، و ممیزی ریز باگ / امنیت / لود. هیچ کدی در این مرحله عوض نشده است.
@@ -118,8 +118,7 @@ P00RIJA_PORTFOLIO/
 ├── prisma/schema.prisma , seed.ts , init.sql
 ├── db/                                  # دادهٔ زنده؛ نباید وارد مخزن شود
 ├── docker/nginx/                        # از جمله cloudflare real-ip و HSTS
-├── license-server/server.mjs            # سرویس مستقل لایسنس
-├── scripts/                             # پکیج، مهاجرت، لایسنس CLI، پروفایل سخت‌افزار
+├── scripts/                             # پکیج، مهاجرت، پروفایل سخت‌افزار
 ├── Dockerfile , docker-compose*.yml
 ├── next.config.ts
 ├── package.json                         # Next ^16.1.1 ، React 19 ، Prisma 6

@@ -98,7 +98,7 @@ model VisitSession {
 
 // Commercial license activation. One row per install (singleton-ish):
 // the encrypted license file payload, this server's unique UUID, the
-// heartbeat state against the license server, and a local usage counter.
+// heartbeat state against the vendor's licensing service, and a local usage counter.
 model LicenseActivation {
   id              String   @id @default(cuid())
   licenseId       String   @unique

@@ -1,5 +1,5 @@
 // License heartbeat loop — started once per server process from
-// instrumentation.ts. Checks in with the license server every
+// instrumentation.ts. Checks in with the vendor's licensing service every
 // heartbeatMinutes (from the license file, default 10) so the owner can
 // revoke/suspend remotely; a failed check eventually flips the site into
 // maintenance mode, and recovery is automatic once checks pass again.

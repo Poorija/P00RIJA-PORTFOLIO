@@ -2,9 +2,17 @@ import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Developer-machine-only extra ignores (private tooling). The file is not
+// part of the repository; when absent (clean clones) nothing is added.
+let privateIgnores = [];
+if (existsSync(__dirname + "/.eslint-private.mjs")) {
+  ({ ignores: privateIgnores } = await import("./.eslint-private.mjs"));
+}
 
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
   rules: {
@@ -48,7 +56,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "dist/**", "download/**", "tool-results/**", "license-server/**", "agent-ctx/**", "next-env.d.ts", "examples/**", "skills", "*.png"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "dist/**", "download/**", "tool-results/**", "agent-ctx/**", "next-env.d.ts", "examples/**", "skills", "*.png", ...privateIgnores]
 }];
 
 export default eslintConfig;

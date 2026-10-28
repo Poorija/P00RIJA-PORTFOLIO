@@ -270,7 +270,7 @@ function LicenseManager({ lang }: { lang: Lang }) {
       setMsg(fa
         ? `اتصال برقرار ✓ — وضعیت: ${j.phase || j.reason || "OK"}`
         : `Connection OK ✓ — phase: ${j.phase || j.reason || "OK"}`);
-    } catch { setMsg(fa ? "❌ عدم ارتباط با سرور لایسنس" : "❌ Cannot reach license server"); }
+    } catch { setMsg(fa ? "❌ عدم ارتباط با سرویس لایسنس" : "❌ Cannot reach the licensing service"); }
     finally { setBusy(false); }
   };
 

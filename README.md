@@ -126,7 +126,7 @@ bash scripts/deploy-image.sh user@your-server   # بارگذاری + ری‌اس
 
 ## 🔐 Licensing · لایسنس
 
-The commercial build **runs only with a valid signed license** (`.lic` — AES-256-GCM + Ed25519), verified on activation, on every request, and through a 10-minute heartbeat to the vendor's license server; revocation, expiry or a burned-out grace window switches the site to a maintenance screen and it recovers automatically. Vendors: see [`scripts/license-cli.mjs`](scripts/license-cli.mjs) and [`DEPLOYMENT.md`](DEPLOYMENT.md).
+The commercial build **runs only with a valid signed license** (`.lic` file or `P00LIC1.` activation code — AES-256-GCM + Ed25519), verified on activation, on every request, and through a periodic heartbeat to the vendor's licensing endpoint; revocation, expiry or a burned-out grace window switches the site to a maintenance screen and it recovers automatically. Licenses are purchased from the vendor — see [`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md).
 
 نسخه‌ی تجاری **فقط با فایل لایسنس امضاشده‌ی معتبر** اجرا می‌شود؛ لغو لایسنس، انقضا یا قطعی طولانی سرور، سایت را به حالت نگهداری می‌برد و با معتبر شدن دوباره به‌صورت خودکار بازیابی می‌شود.
 

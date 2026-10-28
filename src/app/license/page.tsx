@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { KeyRound, ShieldCheck, Wrench, Upload, Loader2, RefreshCw, Mail, Clock } from "lucide-react";
 import { VENDOR_EMAIL, VENDOR_WALLET } from "@/lib/vendor-identity";
+import { normalizeLicenseInput, LicenseCodeError } from "@/lib/license-code";
 
 interface GateInfo {
   phase: "unlicensed" | "maintenance" | "active" | "disabled";
@@ -124,7 +125,15 @@ export default function LicensePage() {
       content = el?.value.trim() ?? "";
     }
     if (!content) {
-      setError("فایل لایسنس را انتخاب کنید یا محتوای آن را بچسبانید.");
+      setError("فایل لایسنس را انتخاب کنید یا کد فعال‌سازی را بچسبانید.");
+      return;
+    }
+    // P00LIC1 activation code → the signed envelope JSON (same format as the
+    // .lic file). Validation of the signature/decryption stays server-side.
+    try {
+      content = normalizeLicenseInput(content);
+    } catch (error) {
+      setError(error instanceof LicenseCodeError ? error.message : "کد فعال‌سازی معتبر نیست.");
       return;
     }
     setBusy(true);
@@ -276,14 +285,17 @@ export default function LicensePage() {
                 />
               </label>
               <div>
-                <p className="mb-1.5 text-xs text-white/40">یا محتوای فایل را اینجا بچسبانید:</p>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs text-white/40">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  یا کد فعال‌سازی (P00LIC1.…) یا محتوای فایل را اینجا بچسبانید:
+                </p>
                 <textarea
                   id="lic-paste"
                   dir="ltr"
                   rows={5}
                   spellCheck={false}
                   className="w-full rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-[11px] text-white/85 outline-none focus:border-sky-300/40"
-                  placeholder='{ "v": 1, "alg": "AES-256-GCM+Ed25519", … }'
+                  placeholder="P00LIC1.eyJ2IjoxLCJhbGciOiJBRVMtMjU2LUdDTStFZDI1NTE5Iiw…"
                 />
               </div>
               {error && <p className="text-xs text-rose-400">{error}</p>}

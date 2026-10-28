@@ -81,11 +81,24 @@ tar -cf - \
   --exclude './gate-*.png' \
   --exclude './live-*.png' \
   --exclude './tsconfig.tsbuildinfo' \
-  --exclude './license-server' \
-  --exclude './docker-compose.license.yml' \
-  --exclude './docker-compose.license.local.yml' \
-  --exclude './Dockerfile.license' \
+  --exclude './.eslint-private.mjs' \
+  --exclude './.package-private-excludes' \
   . | tar -xf - -C "$STAGE"
+
+# Developer-machine-only private excludes (vendor tooling). Kept in a local
+# file so the shipped script carries none of those paths; when the file is
+# absent (clean clone) this loop simply adds nothing.
+PRIVATE_EXCLUDE_FILE="$SCRIPT_DIR/.package-private-excludes"
+if [ -f "$PRIVATE_EXCLUDE_FILE" ]; then
+  while IFS= read -r p; do
+    case "$p" in ''|\#*) continue ;; esac
+    # Only plain relative paths (letters/digits/._-/) may ever reach rm.
+    if ! printf '%s' "$p" | grep -qE '^[A-Za-z0-9._/-]+$'; then
+      echo "ERROR: bad entry in .package-private-excludes: $p" >&2; exit 1
+    fi
+    rm -rf "$STAGE/$p"
+  done < "$PRIVATE_EXCLUDE_FILE"
+fi
 
 # ── 2. Distribution metadata files ──────────────────────────────────────────
 if [ ! -f "$STAGE/.env.example" ]; then
@@ -128,8 +141,14 @@ fi
 if [ -d "$STAGE/db" ]; then
   echo "ERROR: db/ leaked into the package" >&2; exit 1
 fi
-if [ -d "$STAGE/license-server" ] || [ -f "$STAGE/Dockerfile.license" ]; then
-  echo "ERROR: the private license-server leaked into the public package" >&2; exit 1
+if [ -f "$PRIVATE_EXCLUDE_FILE" ]; then
+  while IFS= read -r p; do
+    case "$p" in ''|\#*) continue ;; esac
+    if ! printf '%s' "$p" | grep -qE '^[A-Za-z0-9._/-]+$'; then continue; fi
+    if [ -e "$STAGE/$p" ]; then
+      echo "ERROR: private vendor tooling leaked into the public package: $p" >&2; exit 1
+    fi
+  done < "$PRIVATE_EXCLUDE_FILE"
 fi
 # Assembled at runtime so this script never contains the literal itself.
 local_pw_marker="P00RIJA-local-""2026"

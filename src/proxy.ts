@@ -15,7 +15,7 @@ import { VID_COOKIE, isBlockedVid, verifyVidToken } from "@/lib/visitor-identity
  * P00RIJA defense proxy (Next.js 16 — proxy replaces middleware).
  * Runs before every dynamic request:
  *   1. LICENSE GATE — when licensing is enabled (vendor keys present)
- *      and no valid license is activated (or the license server
+ *      and no valid license is activated (or the licensing service
  *      reports it revoked/expired, or the grace window burned out),
  *      everything is locked: page requests redirect to /license and
  *      APIs get 503 until the license becomes valid again.

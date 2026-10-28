@@ -45,10 +45,6 @@ worklog.md
 Caddyfile
 docker-compose.web.yml
 docker-compose.server.yml
-license-server/
-Dockerfile.license
-docker-compose.license.yml
-docker-compose.license.local.yml
 download/
 examples/
 mini-services/
