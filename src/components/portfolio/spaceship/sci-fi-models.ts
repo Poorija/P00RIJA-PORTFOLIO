@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { ResourcePool, SpaceshipMaterials } from "./materials";
 import type { WingLayout } from "./types";
+import type { MuseumConfig } from "@/lib/content-types";
 
 export function createXWing(pool: ResourcePool, materials: SpaceshipMaterials) {
   const group = new THREE.Group();
@@ -61,7 +62,7 @@ export function createTieFighter(pool: ResourcePool, materials: SpaceshipMateria
   return group;
 }
 
-export function createGalacticObjects(scene: THREE.Scene, pool: ResourcePool, materials: SpaceshipMaterials, lowPower: boolean) {
+export function createGalacticObjects(scene: THREE.Scene, pool: ResourcePool, materials: SpaceshipMaterials, lowPower: boolean, config: MuseumConfig) {
   const root = new THREE.Group();
   scene.add(root);
   const blackHole = new THREE.Group();
@@ -81,7 +82,7 @@ export function createGalacticObjects(scene: THREE.Scene, pool: ResourcePool, ma
   galaxy.position.set(54, 28, -105);
   galaxy.rotation.set(0.65, 0.15, -0.3);
   root.add(galaxy);
-  const count = lowPower ? 600 : 1800;
+  const count = Math.max(100, Math.min(lowPower ? 900 : 6000, config.galaxyCount));
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   for (let index = 0; index < count; index++) {

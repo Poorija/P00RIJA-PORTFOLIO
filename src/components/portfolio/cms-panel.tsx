@@ -79,6 +79,8 @@ import {
   ShieldAlert,
   Smartphone,
   Bot,
+  Compass,
+  Rocket,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -145,6 +147,8 @@ const BUILTIN_SECTIONS: SectionMeta[] = [
   { key: "profile", labelFa: "درباره من و رزومه", labelEn: "About Me & Résumé", icon: User, index: "07", group: "content" },
   { key: "footer", labelFa: "پاورقی", labelEn: "Footer", icon: Mail, index: "09", group: "content" },
   { key: "music", labelFa: "موسیقی و پخش‌کننده", labelEn: "Music Player", icon: Music, color: "var(--ai-1)", index: "08", group: "design" },
+  { key: "explorer", labelFa: "سفر کاوشگر", labelEn: "Explorer Journey", icon: Compass, color: "var(--ai-1)", index: "18", group: "design" },
+  { key: "museum", labelFa: "فضاپیما و راهروها", labelEn: "Spaceship & Decks", icon: Rocket, color: "#67e8f9", index: "19", group: "design" },
   { key: "design", labelFa: "طراحی و کارخانه سه‌بعدی", labelEn: "Design & 3D Factory", icon: Box, index: "10", group: "design" },
   { key: "meteors", labelFa: "کنترل شهاب‌ها", labelEn: "Meteor Controls", icon: Sparkles, color: "#dcecff", index: "11", group: "design" },
   { key: "forms", labelFa: "فرم‌ساز و ایمیل", labelEn: "Forms & Email", icon: FormInput, index: "12", group: "design" },
@@ -1522,7 +1526,7 @@ type ObjectFieldDef = {
   key: string;
   label: string;
   type: "text" | "textarea" | "stringlist" | "color" | "objectlist" | "file" | "checkbox";
-  objectFields?: { key: string; label: string; type: "text" | "textarea" }[];
+  objectFields?: ObjectFieldDef[];
 };
 
 /**
@@ -3862,6 +3866,138 @@ function SectionForm({
               />
             </SubsectionBox>
           )}
+        </FormShell>
+      );
+    }
+
+    /* ============ explorer journey ============ */
+    case "explorer": {
+      const defaults = lang === "fa" ? defaultContentFa.explorer : defaultContentEn.explorer;
+      const v = mergeDefaults(defaults, draft);
+      const setExplorer = (key: keyof SiteContent["explorer"], value: unknown) => setDraft({ ...v, [key]: value });
+      return (
+        <FormShell section={section} title={lang === "fa" ? "سفر کاوشگر — محتوا و ایستگاه‌ها" : "Explorer Journey — content and stations"}>
+          <SubsectionBox title={lang === "fa" ? "رفتار و متن اصلی" : "Behavior and primary copy"} hint={lang === "fa" ? "با همگام‌سازی فعال، هر سکشن فعال در Builder خودکار یک ایستگاه می‌سازد؛ فیلدهای هر ایستگاه override مستقل دارد." : "Auto-sync creates one station from every enabled Builder section; station fields remain independently editable."}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.enabled} onChange={(event) => setExplorer("enabled", event.target.checked)} />{lang === "fa" ? "نمایش Journey و دکمه هدر" : "Show journey and header button"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.autoSync} onChange={(event) => setExplorer("autoSync", event.target.checked)} />{lang === "fa" ? "همگام‌سازی با سکشن‌های CMS" : "Sync with CMS sections"}</label>
+              <TextField label={lang === "fa" ? "برچسب دکمه هدر" : "Header button label"} value={v.headerLabel} onChange={(x) => setExplorer("headerLabel", x)} />
+              <TextField label="Kicker" value={v.kicker} onChange={(x) => setExplorer("kicker", x)} dir="ltr" />
+              <TextField label={lang === "fa" ? "عنوان" : "Title"} value={v.title} onChange={(x) => setExplorer("title", x)} />
+              <TextField label={lang === "fa" ? "زیرعنوان" : "Subtitle"} value={v.subtitle} onChange={(x) => setExplorer("subtitle", x)} />
+              <TextField label={lang === "fa" ? "پیشرفت" : "Progress label"} value={v.progressLabel} onChange={(x) => setExplorer("progressLabel", x)} />
+              <TextField label={lang === "fa" ? "زمان" : "Time label"} value={v.timeLabel} onChange={(x) => setExplorer("timeLabel", x)} />
+              <TextField label={lang === "fa" ? "رتبه" : "Rank label"} value={v.rankLabel} onChange={(x) => setExplorer("rankLabel", x)} />
+              <TextField label={lang === "fa" ? "مقصد بعدی" : "Next label"} value={v.nextLabel} onChange={(x) => setExplorer("nextLabel", x)} />
+              <TextField label={lang === "fa" ? "غافلگیری" : "Surprise label"} value={v.surpriseLabel} onChange={(x) => setExplorer("surpriseLabel", x)} />
+              <TextField label={lang === "fa" ? "گردش دوباره" : "Tour again label"} value={v.tourAgainLabel} onChange={(x) => setExplorer("tourAgainLabel", x)} />
+            </div>
+          </SubsectionBox>
+          <SubsectionBox title={lang === "fa" ? "رتبه‌ها و کنترل نمایش" : "Ranks and visibility"}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <TextField label={lang === "fa" ? "کاوشگر ارشد" : "Master rank"} value={v.rankMaster} onChange={(x) => setExplorer("rankMaster", x)} />
+              <TextField label={lang === "fa" ? "جهان‌گرد" : "Walker rank"} value={v.rankWalker} onChange={(x) => setExplorer("rankWalker", x)} />
+              <TextField label={lang === "fa" ? "ردیاب" : "Seeker rank"} value={v.rankSeeker} onChange={(x) => setExplorer("rankSeeker", x)} />
+              <TextField label={lang === "fa" ? "تازه‌وارد" : "New rank"} value={v.rankNew} onChange={(x) => setExplorer("rankNew", x)} />
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.showTimer} onChange={(event) => setExplorer("showTimer", event.target.checked)} />{lang === "fa" ? "زمان فعال" : "Active timer"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.showRank} onChange={(event) => setExplorer("showRank", event.target.checked)} />{lang === "fa" ? "رتبه" : "Rank"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.showSurprise} onChange={(event) => setExplorer("showSurprise", event.target.checked)} />{lang === "fa" ? "غافلگیری تصادفی" : "Random surprise"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.showPassport} onChange={(event) => setExplorer("showPassport", event.target.checked)} />{lang === "fa" ? "گذرنامه" : "Passport"}</label>
+            </div>
+          </SubsectionBox>
+          <SubsectionBox title={lang === "fa" ? "گذرنامه و اشتراک‌گذاری" : "Passport and sharing"} hint={lang === "fa" ? "در متن قفل، {count} با تعداد ایستگاه‌های باقی‌مانده جایگزین می‌شود." : "In the locked message, {count} is replaced with the remaining station count."}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField label={lang === "fa" ? "عنوان کارت" : "Card title"} value={v.passportTitle} onChange={(x) => setExplorer("passportTitle", x)} />
+              <TextField label={lang === "fa" ? "عنوان داخل PNG" : "PNG heading"} value={v.passportHeading} onChange={(x) => setExplorer("passportHeading", x)} />
+              <TextAreaField label={lang === "fa" ? "توضیح داخل PNG" : "PNG description"} value={v.passportDescription} onChange={(x) => setExplorer("passportDescription", x)} />
+              <TextAreaField label={lang === "fa" ? "متن تکمیل سفر" : "Completion message"} value={v.completeDescription} onChange={(x) => setExplorer("completeDescription", x)} />
+              <TextField label={lang === "fa" ? "متن قفل" : "Locked message"} value={v.lockedDescription} onChange={(x) => setExplorer("lockedDescription", x)} />
+              <TextField label={lang === "fa" ? "دانلود" : "Download label"} value={v.downloadLabel} onChange={(x) => setExplorer("downloadLabel", x)} />
+              <TextField label={lang === "fa" ? "اشتراک" : "Share label"} value={v.shareLabel} onChange={(x) => setExplorer("shareLabel", x)} />
+            </div>
+          </SubsectionBox>
+          <ObjectListField
+            label={lang === "fa" ? "ایستگاه‌ها و overrideها" : "Stations and overrides"}
+            items={v.chapters}
+            onChange={(items) => setExplorer("chapters", items)}
+            fields={[
+              { key: "id", label: lang === "fa" ? "شناسه سکشن (hero/footer/custom-...)" : "Section ID (hero/footer/custom-...)", type: "text" },
+              { key: "title", label: lang === "fa" ? "عنوان" : "Title", type: "text" },
+              { key: "clue", label: lang === "fa" ? "راهنما" : "Clue", type: "textarea" },
+              { key: "color", label: "Color", type: "color" },
+              { key: "icon", label: "rocket/sparkles/compass/map/timeline/trophy", type: "text" },
+              { key: "enabled", label: "Enabled", type: "checkbox" },
+            ]}
+            makeEmpty={() => ({ id: `custom-${Date.now()}`, title: "New station", clue: "", color: "#8b5cf6", icon: "sparkles", enabled: true })}
+          />
+        </FormShell>
+      );
+    }
+
+    /* ============ spaceship museum ============ */
+    case "museum": {
+      const defaults = lang === "fa" ? defaultContentFa.museum : defaultContentEn.museum;
+      const v = mergeDefaults(defaults, draft);
+      const setMuseum = (key: keyof SiteContent["museum"], value: unknown) => setDraft({ ...v, [key]: value });
+      return (
+        <FormShell section={section} title={lang === "fa" ? "فضاپیما — ورودی، فضا، راهروها و کارایی" : "Spaceship — intro, space, decks and performance"}>
+          <SubsectionBox title={lang === "fa" ? "ورودی و راهنمای بازدیدکننده" : "Intro and visitor guidance"}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField label="Kicker" value={v.introKicker} onChange={(x) => setMuseum("introKicker", x)} dir="ltr" />
+              <TextField label={lang === "fa" ? "عنوان ورودی" : "Intro title"} value={v.introTitle} onChange={(x) => setMuseum("introTitle", x)} />
+              <div className="sm:col-span-2"><TextAreaField label={lang === "fa" ? "توضیح ورودی" : "Intro description"} value={v.introDescription} onChange={(x) => setMuseum("introDescription", x)} /></div>
+              <TextField label={lang === "fa" ? "دکمه ورود" : "Board button"} value={v.boardLabel} onChange={(x) => setMuseum("boardLabel", x)} />
+              <TextAreaField label={lang === "fa" ? "پیشنهاد تبلت/کامپیوتر" : "Tablet/desktop recommendation"} value={v.deviceHint} onChange={(x) => setMuseum("deviceHint", x)} />
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.showDeviceHint} onChange={(event) => setMuseum("showDeviceHint", event.target.checked)} />{lang === "fa" ? "نمایش راهنما در موبایل" : "Show hint on touch devices"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.showMinimap} onChange={(event) => setMuseum("showMinimap", event.target.checked)} />{lang === "fa" ? "نقشه" : "Minimap"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.showDeckGuide} onChange={(event) => setMuseum("showDeckGuide", event.target.checked)} />{lang === "fa" ? "راهنمای راهروها" : "Deck guide"}</label>
+            </div>
+          </SubsectionBox>
+          <SubsectionBox title={lang === "fa" ? "فضا و رندر سمت کاربر" : "Space and client-side rendering"} hint={lang === "fa" ? "همه اجرام procedural هستند و فایل سنگین دانلود نمی‌شود. حالت Auto سخت‌افزار ضعیف را تشخیص می‌دهد." : "All objects are procedural with no heavy downloads. Auto detects low-power hardware."}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <ChoiceField label={lang === "fa" ? "کیفیت" : "Quality"} value={v.quality} options={[{ value: "auto", label: "Auto" }, { value: "high", label: "High" }, { value: "low", label: "Low" }]} onChange={(x) => setMuseum("quality", x)} />
+              <NumberField label={lang === "fa" ? "ستاره‌ها" : "Stars"} value={v.starCount} min={100} max={5000} step={100} onChange={(x) => setMuseum("starCount", x)} />
+              <NumberField label={lang === "fa" ? "ستارگان کهکشان" : "Galaxy stars"} value={v.galaxyCount} min={100} max={6000} step={100} onChange={(x) => setMuseum("galaxyCount", x)} />
+              <NumberField label={lang === "fa" ? "شهاب‌سنگ‌ها" : "Asteroids"} value={v.asteroidCount} min={0} max={80} step={1} onChange={(x) => setMuseum("asteroidCount", x)} />
+              <NumberField label={lang === "fa" ? "شهاب‌های عبوری" : "Meteors"} value={v.meteorCount} min={0} max={16} step={1} onChange={(x) => setMuseum("meteorCount", x)} />
+              <NumberField label={lang === "fa" ? "شدت سحابی" : "Nebula intensity"} value={v.nebulaIntensity} min={0} max={2} step={0.05} onChange={(x) => setMuseum("nebulaIntensity", x)} />
+              <NumberField label={lang === "fa" ? "موجودات" : "Crew count"} value={v.creatureCount} min={0} max={10} step={1} onChange={(x) => setMuseum("creatureCount", x)} />
+              <NumberField label={lang === "fa" ? "breakpoint تک‌صفحه کتاب" : "Single-page book breakpoint"} value={v.bookBreakpoint} min={360} max={1100} step={10} onChange={(x) => setMuseum("bookBreakpoint", x)} />
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.autoSync} onChange={(event) => setMuseum("autoSync", event.target.checked)} />{lang === "fa" ? "راهرو خودکار از گالری‌ها" : "Auto decks from galleries"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.trafficEnabled} onChange={(event) => setMuseum("trafficEnabled", event.target.checked)} />{lang === "fa" ? "ترافیک فضایی" : "Space traffic"}</label>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 p-3 text-sm"><input type="checkbox" checked={v.creaturesEnabled} onChange={(event) => setMuseum("creaturesEnabled", event.target.checked)} />{lang === "fa" ? "موجودات سه‌بعدی" : "3D crew"}</label>
+            </div>
+          </SubsectionBox>
+          <ObjectListField
+            label={lang === "fa" ? "نام، رنگ و فعال‌بودن راهروها" : "Deck labels, colors and visibility"}
+            items={v.decks}
+            onChange={(items) => setMuseum("decks", items)}
+            fields={[{ key: "id", label: "Section ID", type: "text" }, { key: "label", label: "Deck label", type: "text" }, { key: "color", label: "Color", type: "color" }, { key: "enabled", label: "Enabled", type: "checkbox" }]}
+            makeEmpty={() => ({ id: `custom-${Date.now()}`, label: "New deck", color: "#38bdf8", enabled: true })}
+          />
+          <ObjectListField
+            label={lang === "fa" ? "راهروهای مستقل و پروژه‌هایشان" : "Independent decks and their projects"}
+            items={v.extraDecks}
+            onChange={(items) => setMuseum("extraDecks", items)}
+            fields={[
+              { key: "id", label: "Deck ID", type: "text" },
+              { key: "label", label: "Deck label", type: "text" },
+              { key: "color", label: "Color", type: "color" },
+              { key: "enabled", label: "Enabled", type: "checkbox" },
+              { key: "projects", label: "Projects", type: "objectlist", objectFields: [
+                { key: "title", label: "Title", type: "text" }, { key: "meta", label: "Meta", type: "text" }, { key: "category", label: "Category", type: "text" },
+                { key: "color", label: "Color", type: "color" }, { key: "year", label: "Year", type: "text" }, { key: "client", label: "Client", type: "text" },
+                { key: "role", label: "Role", type: "text" }, { key: "description", label: "Description", type: "textarea" },
+                { key: "images", label: "Images", type: "stringlist" },
+                { key: "specs", label: "Specs", type: "objectlist", objectFields: [{ key: "key", label: "Key", type: "text" }, { key: "value", label: "Value", type: "text" }] },
+                { key: "links", label: "Links", type: "objectlist", objectFields: [{ key: "label", label: "Label", type: "text" }, { key: "url", label: "URL", type: "text" }, { key: "kind", label: "Kind", type: "text" }] },
+                { key: "process", label: "Process", type: "objectlist", objectFields: [{ key: "title", label: "Title", type: "text" }, { key: "date", label: "Date", type: "text" }, { key: "description", label: "Description", type: "text" }] },
+                { key: "videos", label: "Videos", type: "objectlist", objectFields: [{ key: "url", label: "URL", type: "text" }, { key: "poster", label: "Poster", type: "text" }, { key: "label", label: "Label", type: "text" }] },
+                { key: "featured", label: "Featured image", type: "text" },
+              ] },
+            ]}
+            makeEmpty={() => ({ id: `deck-${Date.now()}`, label: "New independent deck", color: "#f59e0b", enabled: true, projects: [] })}
+          />
         </FormShell>
       );
     }

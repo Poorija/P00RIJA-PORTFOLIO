@@ -1,22 +1,24 @@
 import * as THREE from "three";
 import { makePlanetTexture, type ResourcePool } from "./materials";
+import type { MuseumConfig } from "@/lib/content-types";
 
-export function createSpaceEnvironment(scene: THREE.Scene, pool: ResourcePool, lowPower: boolean) {
+export function createSpaceEnvironment(scene: THREE.Scene, pool: ResourcePool, lowPower: boolean, config: MuseumConfig) {
   const group = new THREE.Group();
   scene.add(group);
   const skyMaterial = pool.track(new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uNebula: { value: config.nebulaIntensity } },
     vertexShader: `varying vec3 vDirection; void main(){ vDirection = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `
       precision highp float;
       varying vec3 vDirection;
       uniform float uTime;
+      uniform float uNebula;
       float hash(vec3 p){ p = fract(p * .3183099 + vec3(.1,.2,.3)); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float noise(vec3 p){
         vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
-        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);
+        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(1,1,1)),hash(i+vec3(1,1,1)),f.x),f.z);
       }
       float fbm(vec3 p){ float v=0.0,a=.5; for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.03+1.7;a*=.5;}return v; }
       void main(){
@@ -30,13 +32,13 @@ export function createSpaceEnvironment(scene: THREE.Scene, pool: ResourcePool, l
         float star=smoothstep(.9945,1.0,cell);
         float bright=pow(hash(floor(d*920.0)+4.2),8.0);
         vec3 starColor=mix(vec3(.55,.72,1.0),vec3(1.0,.82,.62),hash(floor(d*920.0)+8.1));
-        gl_FragColor=vec4(vec3(.0015,.003,.009)+nebula+starColor*star*(1.0+bright*4.0),1.0);
+        gl_FragColor=vec4(vec3(.0015,.003,.009)+nebula*uNebula+starColor*star*(1.0+bright*4.0),1.0);
       }`,
   }));
   const sky = new THREE.Mesh(pool.track(new THREE.SphereGeometry(180, lowPower ? 24 : 40, lowPower ? 16 : 24)), skyMaterial);
   group.add(sky);
 
-  const starCount = lowPower ? 500 : 1500;
+  const starCount = Math.max(100, Math.min(lowPower ? 900 : 5000, config.starCount));
   const positions = new Float32Array(starCount * 3);
   const colors = new Float32Array(starCount * 3);
   for (let i = 0; i < starCount; i++) {

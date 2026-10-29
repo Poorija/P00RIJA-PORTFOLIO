@@ -21,6 +21,13 @@ export function makeBlankContent(lang: Lang): SiteContent {
   blank.timeline = emptyContent(blank.timeline);
   blank.profile = emptyContent(blank.profile);
   blank.footer = emptyContent(blank.footer);
+  blank.explorer = { ...emptyContent(blank.explorer), enabled: false };
+  blank.museum = {
+    ...emptyContent(blank.museum),
+    trafficEnabled: false,
+    creaturesEnabled: false,
+    extraDecks: [],
+  };
 
   blank.music = {
     ...blank.music,

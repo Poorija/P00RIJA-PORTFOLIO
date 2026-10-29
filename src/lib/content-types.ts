@@ -12,6 +12,8 @@ export type SectionKey =
   | "profile"
   | "music"
   | "footer"
+  | "explorer"
+  | "museum"
   | "design"
   | "meteors"
   | "forms"
@@ -71,6 +73,81 @@ export interface PortfolioGalleryConfig {
   /** Display style of the fullscreen gallery popup. Defaults to "cinematic". */
   layout?: GalleryLayout;
   projects: ProjectArtwork[];
+}
+
+export interface ExplorerChapterConfig {
+  id: string;
+  title: string;
+  clue: string;
+  color: string;
+  icon: string;
+  enabled: boolean;
+}
+
+export interface ExplorerConfig {
+  enabled: boolean;
+  autoSync: boolean;
+  headerLabel: string;
+  kicker: string;
+  title: string;
+  subtitle: string;
+  progressLabel: string;
+  timeLabel: string;
+  rankLabel: string;
+  nextLabel: string;
+  surpriseLabel: string;
+  tourAgainLabel: string;
+  passportTitle: string;
+  passportHeading: string;
+  passportDescription: string;
+  completeDescription: string;
+  lockedDescription: string;
+  downloadLabel: string;
+  shareLabel: string;
+  rankMaster: string;
+  rankWalker: string;
+  rankSeeker: string;
+  rankNew: string;
+  showTimer: boolean;
+  showRank: boolean;
+  showSurprise: boolean;
+  showPassport: boolean;
+  chapters: ExplorerChapterConfig[];
+}
+
+export interface MuseumDeckOverride {
+  id: string;
+  label: string;
+  color: string;
+  enabled: boolean;
+}
+
+export interface MuseumDeckConfig extends MuseumDeckOverride {
+  projects: ProjectArtwork[];
+}
+
+export interface MuseumConfig {
+  introKicker: string;
+  introTitle: string;
+  introDescription: string;
+  boardLabel: string;
+  deviceHint: string;
+  showDeviceHint: boolean;
+  showMinimap: boolean;
+  showDeckGuide: boolean;
+  autoSync: boolean;
+  quality: "auto" | "high" | "low";
+  starCount: number;
+  galaxyCount: number;
+  asteroidCount: number;
+  meteorCount: number;
+  creatureCount: number;
+  nebulaIntensity: number;
+  trafficEnabled: boolean;
+  creaturesEnabled: boolean;
+  bookBreakpoint: number;
+  decks: MuseumDeckOverride[];
+  extraDecks: MuseumDeckConfig[];
 }
 
 export interface DeveloperConfig {
@@ -990,6 +1067,8 @@ export interface SiteContent {
     builtWith: string;
   };
   developer: DeveloperConfig;
+  explorer: ExplorerConfig;
+  museum: MuseumConfig;
   design: {
     background: BackgroundDesignConfig;
     cursor: CursorDesignConfig;
@@ -1091,6 +1170,8 @@ export const SECTION_KEYS: SectionKey[] = [
   "profile",
   "music",
   "footer",
+  "explorer",
+  "museum",
   "design",
   "meteors",
   "forms",

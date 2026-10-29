@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
-import { BookOpen, Compass, Lock, MousePointer2, Radar, Rocket, ShieldAlert } from "lucide-react";
+import { BookOpen, Compass, Lock, MousePointer2, Radar, Rocket, ShieldAlert, Smartphone } from "lucide-react";
 import { useContent } from "@/lib/content-store";
 import type { ProjectArtwork } from "@/lib/content-types";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,7 @@ export function MuseumGallery({
   const guardSections = useContent((state) => state.guardSections);
   const guardUnlocked = useContent((state) => state.guardUnlocked);
   const activeLang = useContent((state) => state.lang);
+  const museum = useContent((state) => state.content.museum);
   const frameRate = useContent((state) => state.content.builder?.performance?.frameRate) ?? 60;
   const animationMode = useContent((state) => state.content.builder?.performance?.animationMode) ?? "normal";
   const reducedMotion = Boolean(systemReducedMotion) || animationMode === "off" || animationMode === "reduced";
@@ -53,28 +54,30 @@ export function MuseumGallery({
   const wings = useMemo<WingDef[]>(() => {
     const output: WingDef[] = [];
     const source = activeLang === "fa" ? contentFa : contentEn;
-    const accentOf: Record<string, string> = { graphics: "#a78bfa", security: "#34d399", ai: "#38bdf8" };
-    const labels: Record<string, { fa: string; en: string }> = {
-      graphics: { fa: "راهرو گرافیک", en: "Graphics Deck" },
-      security: { fa: "راهرو امنیت", en: "Security Deck" },
-      ai: { fa: "راهرو هوش مصنوعی", en: "AI Deck" },
-    };
+    const overrides = new Map(museum.decks.map((deck) => [deck.id, deck]));
+    const sectionLabels = new Map(source.builder.sections.map((section) => [section.id, section.label]));
     const galleryLocked = (id: string) => {
       const lock = guardSections[`gallery:${id}`];
       return Boolean(lock?.enabled && lock.hasPassword && !guardUnlocked.includes(`gallery:${id}`));
     };
-    for (const id of ["graphics", "security", "ai"] as const) {
-      const gallery = (source as unknown as Record<string, { gallery?: { projects?: ProjectArtwork[] } }>)[id]?.gallery;
-      if (!gallery || !Array.isArray(gallery.projects) || gallery.projects.length === 0) continue;
-      output.push({ id, label: fa ? labels[id].fa : labels[id].en, color: accentOf[id], locked: galleryLocked(id), projects: gallery.projects });
+    if (museum.autoSync) {
+      for (const id of ["graphics", "security", "ai"] as const) {
+        const gallery = (source as unknown as Record<string, { gallery?: { projects?: ProjectArtwork[] } }>)[id]?.gallery;
+        if (!gallery || !Array.isArray(gallery.projects) || gallery.projects.length === 0) continue;
+        const override = overrides.get(id);
+        output.push({ id, label: override?.label || sectionLabels.get(id) || id, color: override?.color || "#38bdf8", locked: galleryLocked(id), projects: gallery.projects });
+      }
+      for (const [id, data] of Object.entries(customs ?? {})) {
+        const localized = (data as { fa?: { gallery?: { projects?: ProjectArtwork[] }; title?: string }; en?: { gallery?: { projects?: ProjectArtwork[] }; title?: string } })[activeLang];
+        const gallery = localized?.gallery;
+        if (!gallery || !Array.isArray(gallery.projects) || gallery.projects.length === 0) continue;
+        const override = overrides.get(id);
+        output.push({ id, label: override?.label || localized?.title || sectionLabels.get(id) || id.replace(/^custom-/, ""), color: override?.color || "#f59e0b", locked: galleryLocked(id), projects: gallery.projects });
+      }
     }
-    for (const [id, data] of Object.entries(customs ?? {})) {
-      const gallery = (data as { fa?: { gallery?: { projects?: ProjectArtwork[] } }; en?: { gallery?: { projects?: ProjectArtwork[] } } })[activeLang]?.gallery;
-      if (!gallery || !Array.isArray(gallery.projects) || gallery.projects.length === 0) continue;
-      output.push({ id, label: id.replace(/^custom-/, ""), color: "#f59e0b", locked: galleryLocked(id), projects: gallery.projects });
-    }
-    return output;
-  }, [contentEn, contentFa, customs, guardSections, guardUnlocked, activeLang, fa]);
+    output.push(...museum.extraDecks.filter((deck) => deck.enabled !== false && !output.some((wing) => wing.id === deck.id)).map((deck) => ({ ...deck, locked: galleryLocked(deck.id) })));
+    return output.filter((wing) => overrides.get(wing.id)?.enabled !== false);
+  }, [contentEn, contentFa, customs, guardSections, guardUnlocked, activeLang, museum]);
   const layouts = useMemo(() => layoutWings(wings), [wings]);
   const handlersRef = useRef({ onOpenCatalog, onRequestUnlock, onOpenResumeBook });
   useEffect(() => {
@@ -91,7 +94,7 @@ export function MuseumGallery({
     setError(false);
     setReady(false);
     const memory = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4);
-    const lowPower = (navigator.hardwareConcurrency || 4) <= 2 || memory <= 2;
+    const lowPower = museum.quality === "low" || (museum.quality === "auto" && ((navigator.hardwareConcurrency || 4) <= 2 || memory <= 2));
     try {
       const experience = createSpaceshipExperience({
         mount,
@@ -102,6 +105,7 @@ export function MuseumGallery({
         lowPower,
         reducedMotion,
         frameRate,
+        museum,
         onReady: () => setReady(true),
         onFocus: setFocused,
         onPointerLock: setLocked,
@@ -136,7 +140,7 @@ export function MuseumGallery({
       setError(true);
       setReady(false);
     }
-  }, [layouts, lang, spawnWingId, coarse, reducedMotion, frameRate]);
+  }, [layouts, lang, spawnWingId, coarse, reducedMotion, frameRate, museum]);
 
   useEffect(() => {
     experienceRef.current?.setPaused(paused || intro || error);
@@ -258,7 +262,7 @@ export function MuseumGallery({
         </div>
       )}
 
-      {!intro && !error && (
+      {museum.showMinimap && !intro && !error && (
         <div className="absolute bottom-4 start-4 z-20 rounded-lg border border-cyan-100/15 bg-[#03101a]/70 p-2 shadow-2xl backdrop-blur-xl" aria-label={fa ? "نقشه فضاپیما" : "spacecraft map"}>
           <svg width={minimap.size} height={minimap.size} viewBox={`0 0 ${minimap.size} ${minimap.size}`}>
             <circle cx={75} cy={75} r={HUB_R * minimap.scale} fill="rgba(6,24,38,.85)" stroke="rgba(103,232,249,.35)" strokeWidth="1" />
@@ -288,7 +292,7 @@ export function MuseumGallery({
         </div>
       )}
 
-      {wings.length > 1 && !intro && (
+      {museum.showDeckGuide && wings.length > 1 && !intro && (
         <div className="absolute end-4 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">
           {wings.map((wing) => (
             <button key={wing.id} type="button" onClick={() => switchWing(wing)} className={cn("flex items-center gap-2 rounded-md border px-3 py-2 text-[10px] font-bold backdrop-blur-xl transition", wing.id === spawnWingId ? "border-cyan-200/35 bg-cyan-200/10 text-cyan-50" : "border-white/10 bg-[#020b14]/60 text-white/60 hover:bg-[#0a1c29]/80")}>
@@ -306,16 +310,17 @@ export function MuseumGallery({
         <div data-museum-intro className="absolute inset-0 z-50 grid place-items-center overflow-y-auto bg-[#01050c]/85 p-5 backdrop-blur-xl">
           <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-cyan-100/15 bg-[#07111c]/95 p-7 shadow-[0_30px_100px_rgba(0,0,0,.65)] md:p-9">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
-            <div className="flex items-center gap-3 text-cyan-300"><Rocket className="size-5" /><p className="font-mono text-[10px] uppercase tracking-[0.35em]">P00RIJA / ORBITAL ARCHIVE</p></div>
-            <h2 className="mt-5 text-2xl font-black text-white md:text-3xl">{fa ? "به آرشیو مداری خوش آمدید" : "Welcome aboard the orbital archive"}</h2>
-            <p className="mt-3 text-xs leading-6 text-slate-300/70 md:text-sm md:leading-7">{fa ? "در راهروهای فضاپیما قدم بزنید، از پنجره‌ها به فضا نگاه کنید و کتاب سه‌بعدی هر پروژه را ورق بزنید." : "Walk the spacecraft corridors, look into deep space, and open each project's three-dimensional book."}</p>
+            <div className="flex items-center gap-3 text-cyan-300"><Rocket className="size-5" /><p className="font-mono text-[10px] uppercase tracking-[0.35em]">{museum.introKicker}</p></div>
+            <h2 className="mt-5 text-2xl font-black text-white md:text-3xl">{museum.introTitle}</h2>
+            <p className="mt-3 text-xs leading-6 text-slate-300/70 md:text-sm md:leading-7">{museum.introDescription}</p>
             <div className="mt-6 grid gap-3 border-y border-white/8 py-5 text-[11px] text-slate-300/75 sm:grid-cols-2">
               <p><MousePointer2 className="mb-2 size-4 text-cyan-300" />{coarse ? (fa ? "کشیدن صفحه برای چرخش نگاه" : "Drag to look around") : (fa ? "WASD و موس برای حرکت و نگاه" : "WASD and mouse to move and look")}</p>
               <p><BookOpen className="mb-2 size-4 text-cyan-300" />{fa ? "ENTER یا لمس برای باز کردن کتاب" : "Enter or tap to open a book"}</p>
               <p><Compass className="mb-2 size-4 text-cyan-300" />{fa ? "راهنمای کنار صفحه برای تعویض راهرو" : "Deck guide to switch corridors"}</p>
               <p><Radar className="mb-2 size-4 text-cyan-300" />{fa ? "نقشهٔ زنده برای مکان‌یابی" : "Live map for navigation"}</p>
             </div>
-            <button type="button" onClick={() => setIntro(false)} className="mt-6 w-full rounded-lg border border-cyan-200/30 bg-cyan-300/10 px-8 py-3 text-sm font-black text-cyan-50 transition hover:bg-cyan-300/20">{fa ? "ورود به فضاپیما" : "Board the spacecraft"}</button>
+            {museum.showDeviceHint && coarse ? <div className="mt-4 flex items-start gap-3 rounded-xl border border-cyan-100/15 bg-cyan-300/5 p-3 text-[11px] leading-5 text-cyan-100/70"><Smartphone className="mt-0.5 size-4 shrink-0 text-cyan-300" /><p>{museum.deviceHint}</p></div> : null}
+            <button type="button" onClick={() => setIntro(false)} className="mt-6 w-full rounded-lg border border-cyan-200/30 bg-cyan-300/10 px-8 py-3 text-sm font-black text-cyan-50 transition hover:bg-cyan-300/20">{museum.boardLabel}</button>
           </div>
         </div>
       )}

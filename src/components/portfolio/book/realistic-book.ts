@@ -19,6 +19,7 @@ interface RealisticBookOptions {
   lang: "fa" | "en";
   coarse: boolean;
   reducedMotion: boolean;
+  mobileBreakpoint: number;
   onStateChange: (state: BookViewState) => void;
 }
 
@@ -42,6 +43,8 @@ export class RealisticBook {
   private frontMaterial: THREE.MeshStandardMaterial;
   private backMaterial: THREE.MeshStandardMaterial;
   private leftMesh: THREE.Mesh;
+  private leftCoverParts: THREE.Object3D[] = [];
+  private rightCoverParts: THREE.Object3D[] = [];
   private flipGroup = new THREE.Group();
   private flipProgress = { value: 0 };
   private spread = 0;
@@ -176,22 +179,26 @@ export class RealisticBook {
     const rounded = this.track(new RoundedBoxGeometry(1, 1, 1, 3, 0.06));
     const box = this.track(new THREE.BoxGeometry(1, 1, 1));
     for (const side of [-1, 1] as const) {
+      const parts = side === -1 ? this.leftCoverParts : this.rightCoverParts;
       const cover = new THREE.Mesh(rounded, leather);
       cover.scale.set(this.width + 0.11, this.height + 0.13, 0.095);
       cover.position.set(side * (this.width / 2 + 0.025), 0, -0.115);
       cover.rotation.y = side * -0.025;
       cover.castShadow = true;
       this.root.add(cover);
+      parts.push(cover);
       for (let layer = 0; layer < 16; layer++) {
         const sheet = new THREE.Mesh(box, layer % 4 === 0 ? edge : paper);
         sheet.scale.set(this.width - 0.025 - layer * 0.0008, this.height - 0.045 - layer * 0.0005, 0.008);
         sheet.position.set(side * (this.width / 2 + 0.008), 0, -0.06 + layer * 0.0055);
         this.root.add(sheet);
+        parts.push(sheet);
       }
       const trim = new THREE.Mesh(box, metal);
       trim.scale.set(0.025, this.height - 0.12, 0.025);
       trim.position.set(side * (this.width + 0.015), 0, -0.05);
       this.root.add(trim);
+      parts.push(trim);
     }
     const spine = new THREE.Mesh(this.track(new THREE.CylinderGeometry(0.07, 0.07, this.height + 0.1, 24)), leather);
     spine.position.z = -0.09;
@@ -233,6 +240,8 @@ export class RealisticBook {
     const spread = this.spread;
     const flip = this.flip;
     this.leftMesh.visible = !this.single;
+    this.leftCoverParts.forEach((part) => { part.visible = !this.single; });
+    this.rightCoverParts.forEach((part) => { part.visible = true; });
     this.root.position.x = this.single ? -this.width / 2 : 0;
     if (!flip) {
       this.flipGroup.visible = false;
@@ -376,7 +385,7 @@ export class RealisticBook {
     const width = Math.max(1, mount.clientWidth);
     const height = Math.max(1, mount.clientHeight);
     const wasSingle = this.single;
-    this.single = width < 660 || width / height < 0.92;
+    this.single = width < this.options.mobileBreakpoint || width / height < 0.92;
     if (wasSingle !== this.single) {
       const currentPage = wasSingle ? this.spread : this.spread * 2 + (this.options.lang === "fa" ? 0 : 1);
       this.flip = null;

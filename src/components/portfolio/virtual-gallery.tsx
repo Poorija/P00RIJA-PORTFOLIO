@@ -69,6 +69,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
   const profileCfg = useContent((s) => s.content.profile);
   const developerCfg = useContent((s) => s.content.developer);
   const timelineCfg = useContent((s) => s.content.timeline);
+  const museumCfg = useContent((s) => s.content.museum);
   const langSel = useContent((s) => s.lang);
 
   /** The desk book at the museum hub: the owner's profile & résumé bound
@@ -384,6 +385,7 @@ export function VirtualGallery({ projects, title, subtitle, layout = "cinematic"
           <GalleryCatalog
             project={catalogProject}
             lang={lang}
+            mobileBreakpoint={museumCfg.bookBreakpoint}
             onClose={() => setCatalogProject(null)}
           />
         )}

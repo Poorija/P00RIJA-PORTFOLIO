@@ -22,6 +22,7 @@ export function SiteHeader() {
   const [active, setActive] = useState<string>("");
   const site = useContent((s) => s.content.site);
   const builder = useContent((s) => s.content.builder);
+  const explorer = useContent((s) => s.content.explorer);
   const setCmsOpen = useContent((s) => s.setCmsOpen);
   const authed = useContent((s) => s.authed);
   const logout = useContent((s) => s.logout);
@@ -223,16 +224,16 @@ export function SiteHeader() {
             {showLanguage && <LanguageToggle />}
             {showTheme && <ThemeToggle />}
             <MotionToggle />
-            <button
+            {explorer.enabled ? <button
               onClick={() => window.dispatchEvent(new CustomEvent("open-explorer-passport"))}
               data-cursor-hover
-              aria-label={lang === "fa" ? "سفر کاوشگر" : "Explorer journey"}
-              title={lang === "fa" ? "سفر کاوشگر" : "Explorer journey"}
+              aria-label={explorer.headerLabel}
+              title={explorer.headerLabel}
               className="grid h-9 w-9 place-items-center rounded-full border text-foreground transition-colors hover:bg-surface-2"
               style={{ background: "var(--surface-1)", borderColor: "color-mix(in oklch, var(--ai-1) 40%, transparent)" }}
             >
               <Compass className="h-4 w-4" style={{ color: "var(--ai-1)" }} />
-            </button>
+            </button> : null}
             {/* Game Center — arcade console overlay */}
             <button
               onClick={() => openGameCenter()}
@@ -292,15 +293,15 @@ export function SiteHeader() {
           {showLanguage && <LanguageToggle />}
           {showTheme && <ThemeToggle />}
           <MotionToggle />
-          <button
+          {explorer.enabled ? <button
             onClick={() => window.dispatchEvent(new CustomEvent("open-explorer-passport"))}
             data-cursor-hover
-            aria-label={lang === "fa" ? "سفر کاوشگر" : "Explorer journey"}
+            aria-label={explorer.headerLabel}
             className="grid h-10 w-10 place-items-center rounded-xl border text-foreground"
             style={{ borderColor: "color-mix(in oklch, var(--ai-1) 40%, transparent)" }}
           >
             <Compass className="h-4 w-4" style={{ color: "var(--ai-1)" }} />
-          </button>
+          </button> : null}
           <button
             onClick={() => openGameCenter()}
             data-cursor-hover

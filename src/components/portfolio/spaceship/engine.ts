@@ -9,8 +9,11 @@ import { createSpaceEnvironment } from "./environment";
 import { createSpaceshipMaterials, ResourcePool } from "./materials";
 import { createSpaceTraffic } from "./station-details";
 import { createGalacticObjects } from "./sci-fi-models";
+import { createAlienCrew } from "./crew";
+import { createSpaceDebris } from "./space-debris";
 import { EYE, HUB_R, VIEW_DIST, WING_W, type ArtworkEntry, type FocusInfo, type WingLayout } from "./types";
 import { projectTarget } from "@/lib/guard-targets";
+import type { MuseumConfig } from "@/lib/content-types";
 
 interface ExperienceOptions {
   mount: HTMLDivElement;
@@ -21,6 +24,7 @@ interface ExperienceOptions {
   lowPower: boolean;
   reducedMotion: boolean;
   frameRate: number;
+  museum: MuseumConfig;
   onReady: () => void;
   onFocus: (focus: FocusInfo | null) => void;
   onPointerLock: (locked: boolean) => void;
@@ -96,17 +100,24 @@ export function createSpaceshipExperience(options: ExperienceOptions): Spaceship
   hubFill.position.set(0, 2.2, 0);
   scene.add(hubFill);
 
-  const updateSpace = createSpaceEnvironment(scene, pool, lowPower);
-  const updateTraffic = createSpaceTraffic(scene, pool, materials, lowPower);
-  const updateGalaxy = createGalacticObjects(scene, pool, materials, lowPower);
+  const updateSpace = createSpaceEnvironment(scene, pool, lowPower, options.museum);
+  const updateTraffic = options.museum.trafficEnabled ? createSpaceTraffic(scene, pool, materials, lowPower) : () => undefined;
+  const updateGalaxy = createGalacticObjects(scene, pool, materials, lowPower, options.museum);
+  const updateDebris = createSpaceDebris(scene, pool, materials, lowPower, options.museum.asteroidCount, options.museum.meteorCount);
+  const updateCrew = options.museum.creaturesEnabled ? createAlienCrew(scene, pool, materials, lowPower, options.museum.creatureCount) : () => undefined;
   const { artworks, animated, obstacles } = buildSpaceshipArchitecture({ scene, layouts, pool, materials, lang, lowPower, reducedMotion });
 
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), lowPower ? 0.1 : 0.22, 0.42, 1.05);
-  composer.addPass(bloom);
-  const output = new OutputPass();
-  composer.addPass(output);
+  let composer: EffectComposer | null = null;
+  let bloom: UnrealBloomPass | null = null;
+  let output: OutputPass | null = null;
+  if (!lowPower) {
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    bloom = new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.22, 0.42, 1.05);
+    composer.addPass(bloom);
+    output = new OutputPass();
+    composer.addPass(output);
+  }
 
   type Collider = { dir: { x: number; z: number }; perp: { x: number; z: number }; alongMin: number; alongMax: number; halfW: number; wallStart: number; wallPlane: number };
   const colliders: Collider[] = layouts.map((layout) => ({
@@ -345,7 +356,7 @@ export function createSpaceshipExperience(options: ExperienceOptions): Spaceship
     camera.aspect = mount.clientWidth / mount.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(mount.clientWidth, mount.clientHeight);
-    composer.setSize(mount.clientWidth, mount.clientHeight);
+    composer?.setSize(mount.clientWidth, mount.clientHeight);
   };
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(mount);
@@ -447,13 +458,16 @@ export function createSpaceshipExperience(options: ExperienceOptions): Spaceship
     updateSpace(elapsedTime, reducedMotion ? 0 : dt);
     updateTraffic(elapsedTime, reducedMotion ? 0 : dt);
     updateGalaxy(elapsedTime, reducedMotion ? 0 : dt);
+    updateDebris(elapsedTime, reducedMotion ? 0 : dt);
+    updateCrew(elapsedTime, reducedMotion ? 0 : dt);
     for (const update of animated) update(elapsedTime, reducedMotion ? 0 : dt, player.pos);
     hudElapsed += dt;
     if (hudElapsed > 0.1) {
       hudElapsed = 0;
       updateFocus();
     }
-    composer.render();
+    if (composer) composer.render();
+    else renderer.render(scene, camera);
   };
 
   options.onReady();
@@ -495,9 +509,9 @@ export function createSpaceshipExperience(options: ExperienceOptions): Spaceship
       canvas.removeEventListener("webglcontextrestored", onContextRestored);
       if (document.pointerLockElement === canvas) document.exitPointerLock?.();
       environmentTarget.dispose();
-      bloom.dispose();
-      output.dispose();
-      composer.dispose();
+      bloom?.dispose();
+      output?.dispose();
+      composer?.dispose();
       pool.dispose();
       renderer.dispose();
       if (canvas.parentElement === mount) mount.removeChild(canvas);

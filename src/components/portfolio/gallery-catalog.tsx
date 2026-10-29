@@ -13,7 +13,7 @@ import { useDialogFocus } from "./use-dialog-focus";
 const FA_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
 const toFa = (value: number) => String(value).replace(/\d/g, (digit) => FA_DIGITS[+digit]);
 
-export function GalleryCatalog({ project, lang, onClose }: { project: ProjectArtwork; lang: "fa" | "en"; onClose: () => void }) {
+export function GalleryCatalog({ project, lang, mobileBreakpoint = 660, onClose }: { project: ProjectArtwork; lang: "fa" | "en"; mobileBreakpoint?: number; onClose: () => void }) {
   const fa = lang === "fa";
   const pages = useMemo(() => buildBookPages(project), [project]);
   const mountRef = useRef<HTMLDivElement>(null);
@@ -40,6 +40,7 @@ export function GalleryCatalog({ project, lang, onClose }: { project: ProjectArt
         lang,
         coarse: window.matchMedia("(pointer: coarse)").matches,
         reducedMotion,
+        mobileBreakpoint,
         onStateChange: setView,
       });
       bookRef.current = book;
@@ -51,7 +52,7 @@ export function GalleryCatalog({ project, lang, onClose }: { project: ProjectArt
     } catch {
       setError(true);
     }
-  }, [pages, project, lang, reducedMotion]);
+  }, [pages, project, lang, reducedMotion, mobileBreakpoint]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

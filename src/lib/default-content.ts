@@ -485,6 +485,92 @@ function makeDefaultForms(lang: "fa" | "en"): SiteContent["forms"] {
   };
 }
 
+function makeDefaultExplorer(lang: "fa" | "en"): SiteContent["explorer"] {
+  const isFa = lang === "fa";
+  const chapter = (id: string, title: string, clue: string, color: string, icon: string) => ({ id, title, clue, color, icon, enabled: true });
+  return {
+    enabled: true,
+    autoSync: true,
+    headerLabel: isFa ? "سفر کاوشگر" : "Explorer journey",
+    kicker: "P00RIJA / EXPEDITION",
+    title: isFa ? "سفر در جهان‌های پورتفولیو" : "The portfolio expedition",
+    subtitle: isFa
+      ? "هر جهان را کشف کن، نشان‌ها را جمع کن و در پایان گذرنامه اختصاصی سفرت را بساز."
+      : "Explore each world, collect its stamp, and create your own journey passport at the finish line.",
+    progressLabel: isFa ? "پیشرفت" : "PROGRESS",
+    timeLabel: isFa ? "زمان کاوش" : "ACTIVE TIME",
+    rankLabel: isFa ? "رتبه" : "RANK",
+    nextLabel: isFa ? "مقصد بعدی" : "Next destination",
+    surpriseLabel: isFa ? "منو غافلگیر کن" : "Surprise me",
+    tourAgainLabel: isFa ? "گردش دوباره" : "Tour again",
+    passportTitle: isFa ? "گذرنامه کاوشگر" : "Explorer passport",
+    passportHeading: isFa ? "کاوشگر جهان‌های P00RIJA" : "P00RIJA world explorer",
+    passportDescription: isFa
+      ? "این سفر در دنیای تعاملی P00RIJA کامل شد."
+      : "A completed journey through the interactive P00RIJA universe.",
+    completeDescription: isFa
+      ? "سفرت کامل شد؛ کارت PNG واقعی همین سفر را دانلود یا اشتراک بگذار."
+      : "Journey complete. Download or share a PNG card generated from your actual progress.",
+    lockedDescription: isFa ? "با کشف همه جهان‌ها باز می‌شود؛ {count} ایستگاه دیگر مانده." : "Unlocks after every world is discovered; {count} stations remain.",
+    downloadLabel: isFa ? "دانلود گذرنامه" : "Download passport",
+    shareLabel: isFa ? "اشتراک‌گذاری" : "Share",
+    rankMaster: isFa ? "کاوشگر ارشد" : "Master explorer",
+    rankWalker: isFa ? "جهان‌گرد" : "World walker",
+    rankSeeker: isFa ? "ردیاب سیگنال" : "Signal seeker",
+    rankNew: isFa ? "تازه‌وارد" : "New arrival",
+    showTimer: true,
+    showRank: true,
+    showSurprise: true,
+    showPassport: true,
+    chapters: [
+      chapter("hero", isFa ? "نقطه آغاز" : "Origin", isFa ? "از منظومه مرکزی، مسیرت را انتخاب کن." : "Choose your route from the central solar system.", "#8b5cf6", "rocket"),
+      chapter("graphics", isFa ? "سیاره رنگ" : "Chromatic world", isFa ? "جایی که تصویر و حرکت حرف می‌زنند." : "Where images and motion do the talking.", "#d946ef", "sparkles"),
+      chapter("ai", isFa ? "سیگنال هوش" : "Intelligence signal", isFa ? "به دنبال جهانی باش که فکر و خلق می‌کند." : "Find the world that thinks and creates.", "#06b6d4", "compass"),
+      chapter("security", isFa ? "دژ امن" : "Secure citadel", isFa ? "لایه‌های پنهان شبکه و امنیت را کشف کن." : "Discover the hidden layers of networks and security.", "#22c55e", "map"),
+      chapter("timeline", isFa ? "گذر زمان" : "Time passage", isFa ? "مسیر تجربه‌ها را قدم به قدم دنبال کن." : "Follow the route of experience, step by step.", "#f59e0b", "timeline"),
+      chapter("synthesis", isFa ? "نقطه تلاقی" : "Convergence", isFa ? "ببین این جهان‌ها چطور به هم می‌رسند." : "See how all of these worlds connect.", "#ec4899", "sparkles"),
+      chapter("footer", isFa ? "آخرین مختصات" : "Final coordinates", isFa ? "برای ثبت سفر، به ایستگاه ارتباط برس." : "Reach the contact station to complete the journey.", "#eab308", "trophy"),
+    ],
+  };
+}
+
+function makeDefaultMuseum(lang: "fa" | "en"): SiteContent["museum"] {
+  const isFa = lang === "fa";
+  return {
+    introKicker: "P00RIJA / ORBITAL ARCHIVE",
+    introTitle: isFa ? "به آرشیو مداری خوش آمدید" : "Welcome aboard the orbital archive",
+    introDescription: isFa
+      ? "در راهروهای فضاپیما قدم بزنید، از پنجره‌ها به فضا نگاه کنید و کتاب سه‌بعدی هر پروژه را ورق بزنید."
+      : "Walk the spacecraft corridors, look into deep space, and open each project's three-dimensional book.",
+    boardLabel: isFa ? "ورود به فضاپیما" : "Board the spacecraft",
+    deviceHint: isFa
+      ? "برای دیدن جزئیات بیشتر و تجربه بصری بهتر، تبلت یا کامپیتر پیشنهاد می‌شود؛ نسخه موبایل نیز کامل در دسترس است."
+      : "For richer detail and the best visual experience, use a tablet or computer; the mobile edition remains fully available.",
+    showDeviceHint: true,
+    showMinimap: true,
+    showDeckGuide: true,
+    autoSync: true,
+    quality: "auto",
+    starCount: 1500,
+    galaxyCount: 1800,
+    asteroidCount: 22,
+    meteorCount: 4,
+    creatureCount: 3,
+    nebulaIntensity: 1,
+    trafficEnabled: true,
+    creaturesEnabled: true,
+    bookBreakpoint: 660,
+    decks: [
+      { id: "graphics", label: isFa ? "راهرو گرافیک" : "Graphics Deck", color: "#a78bfa", enabled: true },
+      { id: "security", label: isFa ? "راهرو امنیت" : "Security Deck", color: "#34d399", enabled: true },
+      { id: "ai", label: isFa ? "راهرو هوش مصنوعی" : "AI Deck", color: "#38bdf8", enabled: true },
+    ],
+    extraDecks: [
+      { id: "observatory", label: isFa ? "رصدخانه مداری" : "Orbital Observatory", color: "#f59e0b", enabled: true, projects: [] },
+    ],
+  };
+}
+
 function makeDefaultBuilder(lang: "fa" | "en"): SiteContent["builder"] {
   const isFa = lang === "fa";
   return {
@@ -1191,6 +1277,8 @@ export const defaultContentFa: SiteContent = {
     builtWith: "با دقت طراحی و ساخته شده",
   },
   developer: makeDeveloper("fa"),
+  explorer: makeDefaultExplorer("fa"),
+  museum: makeDefaultMuseum("fa"),
   design: makeDefaultDesign("fa"),
   meteors: makeDefaultMeteors(),
   forms: makeDefaultForms("fa"),
@@ -1534,6 +1622,8 @@ export const defaultContentEn: SiteContent = {
     builtWith: "Designed & built with care",
   },
   developer: makeDeveloper("en"),
+  explorer: makeDefaultExplorer("en"),
+  museum: makeDefaultMuseum("en"),
   design: makeDefaultDesign("en"),
   meteors: makeDefaultMeteors(),
   forms: makeDefaultForms("en"),
