@@ -17,6 +17,7 @@
  * ============================================================ */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff, Lock, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import {
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/input-otp";
 import { useContent, type GuardLockInfo } from "@/lib/content-store";
 import { normalizeDigits } from "@/lib/persian-digits";
+import { riskyPaintEnv } from "@/lib/pointer-env";
 import { cn } from "@/lib/utils";
 
 function isLockedFor(lock: GuardLockInfo | undefined, unlocked: string[], loaded: boolean): boolean {
@@ -118,7 +120,21 @@ export function GuardUnlockDialog({
     setText("");
   };
 
-  return (
+  // iOS WebKit (incl. iPadOS, which reports a desktop UA) and touch-primary
+  // devices composite backdrop-filter overlays over filtered content
+  // unreliably — the whole fixed layer can silently paint as nothing. There
+  // the backdrop stays SOLID; the glass look is kept for fine-pointer
+  // desktops only.
+  const glassBackdrop = !riskyPaintEnv();
+
+  // Portal to <body>: section shells animate with transform/opacity, and a
+  // transformed ancestor becomes the containing block for fixed-position
+  // descendants on WebKit — the dialog can end up positioned (and clipped)
+  // inside its section instead of the viewport. Body-level rendering also
+  // keeps the z-[140] order honest against the other body-level portals.
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <motion.div
       data-guard-dialog
       // Mobile: top-aligned with breathing room so the on-screen keyboard
@@ -132,9 +148,13 @@ export function GuardUnlockDialog({
       aria-modal="true"
       aria-label={fa ? "بازکردن بخش قفل‌شده" : "Unlock protected section"}
     >
-      {/* Solid backdrop on mobile (backdrop-filter paints unreliably on iOS
-          WebKit with the keyboard up); blurred glass from sm up. */}
-      <div className="absolute inset-0 bg-background/95 sm:bg-background/85 sm:backdrop-blur-md" onClick={onClose} aria-hidden />
+      {/* Solid backdrop on risky-paint environments; blurred glass from sm up
+          on fine-pointer desktops. */}
+      <div
+        className={cn("absolute inset-0 bg-background/95", glassBackdrop && "sm:bg-background/85 sm:backdrop-blur-md")}
+        onClick={onClose}
+        aria-hidden
+      />
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 14 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -276,7 +296,8 @@ export function GuardUnlockDialog({
           )}
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
 
@@ -309,6 +330,9 @@ export function SectionGuardShell({
   const guardLoaded = useContent((s) => s.guardLoaded);
   const viewportWidth = useContent((s) => s.viewportWidth);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Paint-risk env is stable for the session; captured once (the dialog only
+  // ever opens after user interaction, so this never affects SSR hydration).
+  const [riskyPaint] = useState(riskyPaintEnv);
   const fa = lang === "fa";
 
   // Hooks must run regardless of lock state; compute the lock after.
@@ -456,14 +480,31 @@ export function SectionGuardShell({
 
   return (
     <div className="relative" data-guard-target={target}>
-      <div
-        inert
-        aria-hidden
-        className="pointer-events-none select-none [&_*]:!pointer-events-none"
-        style={{ filter: "blur(18px) saturate(1.15)", opacity: 0.75 }}
-      >
-        {children}
-      </div>
+      {riskyPaint && dialogOpen ? (
+        // iPadOS/iOS WebKit: a live WebGL canvas behind an 18px blur while a
+        // fixed overlay opens is the exact compositing stack that made phones
+        // kill the tab (v3.3.3) — while the dialog is open, unmount the real
+        // children and show a calm static placeholder instead.
+        <div
+          inert
+          aria-hidden
+          className="min-h-[420px]"
+          style={{
+            background:
+              `radial-gradient(120% 90% at 20% 0%, color-mix(in oklch, ${accent} 14%, transparent), transparent 60%),` +
+              `radial-gradient(100% 80% at 90% 100%, color-mix(in oklch, ${accent} 10%, transparent), transparent 55%)`,
+          }}
+        />
+      ) : (
+        <div
+          inert
+          aria-hidden
+          className="pointer-events-none select-none [&_*]:!pointer-events-none"
+          style={{ filter: "blur(18px) saturate(1.15)", opacity: 0.75 }}
+        >
+          {children}
+        </div>
+      )}
       {lockOverlay}
       <AnimatePresence>
         {dialogOpen && lock && (
