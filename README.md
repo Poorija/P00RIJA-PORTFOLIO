@@ -12,7 +12,7 @@
 [![Node](https://img.shields.io/badge/Node-24-339933?logo=nodedotjs)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-commercial-important)](LICENSE-COMMERCIAL.md)
 
-`v4.7.1` · Next.js 16 (App Router · Turbopack · standalone) · React 19 · Tailwind 4 · Prisma 6/SQLite · Three.js · Lenis — **tested with 1 CPU / 512 MB RAM (about 101 MB idle runtime)** · Developer: [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com)
+`v4.7.2` · Next.js 16 (App Router · Turbopack · standalone) · React 19 · Tailwind 4 · Prisma 6/SQLite · Three.js · Lenis — **tested with 1 CPU / 512 MB RAM (about 101 MB idle runtime)** · Developer: [`p00rija@tutamail.com`](mailto:p00rija@tutamail.com)
 
 </div>
 
@@ -33,6 +33,7 @@ A single-page, space-themed portfolio with a full built-in CMS. Three orbiting w
 - 🖼 **Cinematic virtual galleries** — per-project media, specs and multi-links; a gallery can be added to **any** section
 - 🔐 **Access Guard** — password-protect the **whole site**, any **section**, or **each gallery independently**: 4/6-digit PIN or text password, **temporary passwords with auto-expiry**, attempt-limited locks (bank-card style disable), server-side content withholding, `/gate` site-wide screen
 - 🎮 **Galaxy Arcade** — 26 built-in games in a console-style overlay (header button or `G`), per-game high scores, RTL-safe controls
+- 🧭 **Seven-world Explorer Passport** — guided and random journeys through the real portfolio sections, locally saved discovery stamps, active exploration time, explorer ranks, a hidden achievement, and a bilingual PNG passport that visitors can download or share after completing all seven worlds
 - 💻 **Interactive security terminal** — ~130 commands, TAB completion, true fullscreen mode, 50 creative generators and mini-games, local-only ASCII image/video rendering with 10 density levels, MATRIX/RGB/MONO output and PNG export, plus a direct 15 FPS webcam renderer with same-origin Permissions Policy, constraint fallback, detailed browser errors, and full stream cleanup
 - 🧪 **Creative Lab** — twelve browser-local interactive experiments including the original GPL ASCIIquarium sprite engine (classic fish, masks, seaweed, castle, shark, ship, whale, monster, and bubbles) and a fully character-rendered forest Campfire with six campers, a tent, twinkling stars, fireflies, and shooting stars
 - 📊 **First-party visitor analytics** — sessions, duration, IP & Geo-IP, browser/device, referrers, 30-day charts, live world map; cookie-free, Do-Not-Track aware, **nothing tracked before consent**
@@ -87,6 +88,7 @@ bash scripts/deploy-image.sh user@your-server   # load + restart + health check
 - 🖼 **گالری‌های مجازی سینمایی** — رسانه، مشخصات و چند لینک برای هر پروژه؛ افزودن گالری به **هر بخش دلخواه**
 - 🔐 **قفل رمز (Access Guard)** — پسورد روی **کل سایت**، هر **بخش** یا **هر گالری به‌صورت مستقل**: رمز ۴/۶ رقمی یا متنی، **رمز موقت با انقضای خودکار**، حالت سقف تلاش (غیرفعال‌شدن مثل کارت بانکی)، حذف محتوای واقعی از سمت سرور تا وارد کردن رمز، صفحه‌ی `/gate` برای قفل کل سایت
 - 🎮 **مرکز بازی (Galaxy Arcade)** — ۲۶ بازی داخلی در اورلی کنسولی (دکمه‌ی هدر یا کلید `G`)، رکورد شخصی برای هر بازی، سازگار با راست‌به‌چپ
+- 🧭 **گذرنامه کاوشگر هفت جهان** — سفر هدایت‌شده یا تصادفی در بخش‌های واقعی پورتفولیو، ذخیره محلی نشان‌های کشف، زمان فعال کاوش، رتبه کاوشگر، دستاورد مخفی و گذرنامه PNG دوزبانه برای دانلود یا اشتراک‌گذاری پس از کامل‌شدن هر هفت جهان
 - 💻 **ترمینال امنیت تعاملی** — حدود ۱۳۰ دستور با تکمیل TAB، حالت واقعی تمام‌صفحه، ۵۰ generator و مینی‌گیم خلاقانه، رندر محلی ASCII از تصویر/ویدیو با ۱۰ سطح Density، حالت‌های MATRIX/RGB/MONO و خروجی PNG؛ رندر مستقیم وب‌کم با ۱۵ FPS، Permissions Policy هم‌مبدأ، fallback محدودیت‌ها، خطاهای دقیق و توقف کامل stream
 - 🧪 **آزمایشگاه خلاقیت** — دوازده تجربه محلی شامل موتور اصلی ASCIIquarium با spriteهای GPL، ماهی و mask رنگ، جلبک، قلعه، کوسه، کشتی، نهنگ، هیولا و حباب؛ Campfire کاملاً کاراکتری با شش نفر، چادر، ستاره، کرم شب‌تاب و شهاب
 - 📊 **آمار بازدیدکننده‌ی اختصاصی** — نشست‌ها، مدت حضور، موقعیت جغرافیایی، مرورگر/دستگاه، نمودار ۳۰ روزه، نقشه‌ی زنده؛ بدون کوکی، با احترام به Do-Not-Track و **بدون ثبت هیچ داده‌ای قبل از رضایت**
