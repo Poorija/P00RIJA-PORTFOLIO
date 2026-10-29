@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Settings2, LogOut, Gamepad2 } from "lucide-react";
+import { Menu, X, Settings2, LogOut, Gamepad2, Compass } from "lucide-react";
 import { useContent } from "@/lib/content-store";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
@@ -223,6 +223,16 @@ export function SiteHeader() {
             {showLanguage && <LanguageToggle />}
             {showTheme && <ThemeToggle />}
             <MotionToggle />
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("open-explorer-passport"))}
+              data-cursor-hover
+              aria-label={lang === "fa" ? "سفر کاوشگر" : "Explorer journey"}
+              title={lang === "fa" ? "سفر کاوشگر" : "Explorer journey"}
+              className="grid h-9 w-9 place-items-center rounded-full border text-foreground transition-colors hover:bg-surface-2"
+              style={{ background: "var(--surface-1)", borderColor: "color-mix(in oklch, var(--ai-1) 40%, transparent)" }}
+            >
+              <Compass className="h-4 w-4" style={{ color: "var(--ai-1)" }} />
+            </button>
             {/* Game Center — arcade console overlay */}
             <button
               onClick={() => openGameCenter()}
@@ -282,6 +292,15 @@ export function SiteHeader() {
           {showLanguage && <LanguageToggle />}
           {showTheme && <ThemeToggle />}
           <MotionToggle />
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("open-explorer-passport"))}
+            data-cursor-hover
+            aria-label={lang === "fa" ? "سفر کاوشگر" : "Explorer journey"}
+            className="grid h-10 w-10 place-items-center rounded-xl border text-foreground"
+            style={{ borderColor: "color-mix(in oklch, var(--ai-1) 40%, transparent)" }}
+          >
+            <Compass className="h-4 w-4" style={{ color: "var(--ai-1)" }} />
+          </button>
           <button
             onClick={() => openGameCenter()}
             data-cursor-hover

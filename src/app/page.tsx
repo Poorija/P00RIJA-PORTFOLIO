@@ -27,6 +27,7 @@ import { AssetPreloader } from "@/components/portfolio/asset-preloader";
 import { ExternalAnalytics } from "@/components/portfolio/external-analytics";
 import { CookieConsent } from "@/components/portfolio/cookie-consent";
 const PixelBuddy = dynamic(() => import("@/components/portfolio/pixel-buddy").then((m) => ({ default: m.PixelBuddy })), { ssr: false });
+const ExplorerPassport = dynamic(() => import("@/components/portfolio/explorer-passport").then((m) => ({ default: m.ExplorerPassport })), { ssr: false });
 const GsapScrollEffects = dynamic(() => import("@/components/portfolio/gsap-scroll-effects").then((m) => ({ default: m.GsapScrollEffects })), { ssr: false });
 import { SmoothScroll } from "@/components/portfolio/smooth-scroll";
 import { SectionGuardShell } from "@/components/portfolio/section-guard";
@@ -72,6 +73,7 @@ export default function Home() {
         <ExternalAnalytics />
         <CookieConsent />
         <PixelBuddy />
+        <ExplorerPassport />
         <GsapScrollEffects />
         </div>
       </AnimModeController>

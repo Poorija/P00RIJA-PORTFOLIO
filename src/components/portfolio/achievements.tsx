@@ -61,6 +61,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "golden-p00rija", emoji: "🏆", fa: "کلید سه جهان", en: "Key of three worlds", secret: true },
   { id: "creator-signature", emoji: "✨", fa: "امضای خالق", en: "Creator signature", secret: true },
   { id: "golden-hunter", emoji: "🥚", fa: "شکار تخم‌مرغ طلایی", en: "Golden egg hunter", secret: true },
+  { id: "world-cartographer", emoji: "🧭", fa: "کاوشگر هفت جهان", en: "Seven-world cartographer", secret: true },
 ];
 
 type Unlocked = Record<string, number>;
